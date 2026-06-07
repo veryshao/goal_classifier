@@ -1,7 +1,7 @@
 import re
 import sys
 
-UTTERANCE_RE = re.compile(r'\[(\d+:\d+)\]\s+(Tutor|Student)(?:\s+\([^)]+\))?:\s+([^\[]+)')
+UTTERANCE_RE = re.compile(r'\[(\d+(?::\d+)+)\]\s+(Tutor|Student)(?:\s+\([^)]+\))?:\s+([^\[]+)')
 
 if len(sys.argv) < 2:
     print("Usage: python print_indices.py data/transcripts/session1.txt")

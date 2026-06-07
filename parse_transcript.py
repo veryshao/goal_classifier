@@ -12,17 +12,22 @@ class TranscriptEvent:
     raw: str
 
 def timestamp_to_seconds(ts: str) -> int:
-    parts = ts.strip().split(":")
-    return int(parts[0]) * 60 + int(parts[1])
+    # Handles both "mm:ss" and "h:mm:ss" (sessions can run past an hour).
+    seconds = 0
+    for part in ts.strip().split(":"):
+        seconds = seconds * 60 + int(part)
+    return seconds
 
 # ── Patterns ──────────────────────────────────────────────────────────────────
+# Timestamps are "mm:ss" or "h:mm:ss" — require at least one colon so both
+# forms match (a literal "\d+:\d+" would silently fail to match "1:02:33").
 
 UTTERANCE_RE = re.compile(
-    r'\[(\d+:\d+)\]\s+(Tutor|Student)(?:\s+\([^)]+\))?:\s+([^\[]+)'
+    r'\[(\d+(?::\d+)+)\]\s+(Tutor|Student)(?:\s+\([^)]+\))?:\s+([^\[]+)'
 )
 
 APP_EVENT_RE = re.compile(
-    r'\[(\d+:\d+)\]\s+\[(app_switch|mouse click|mouse drag|keyboard type|'
+    r'\[(\d+(?::\d+)+)\]\s+\[(app_switch|mouse click|mouse drag|keyboard type|'
     r'page_scroll|drawing|view_change|inactivity|system|mouse move|'
     r'keyboard delete|mouse hover) event[^\]]*\]\s*([^\[]*)'
 )

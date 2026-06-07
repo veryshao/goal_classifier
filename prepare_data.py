@@ -1,7 +1,26 @@
 import json
+import os
 from typing import List, Dict, Any
 from parse_transcript import parse_transcript, TranscriptEvent
 from label_schema import LABEL2ID, GOAL_APP_SIGNALS
+
+# Concise tag used to summarize each non-utterance event type in [APP_CTX].
+# Covers every event_type produced by parse_transcript's EVENT_TYPE_MAP so
+# none of them are silently dropped from the model's screen-context window.
+EVENT_TAG = {
+    "app_switch":      "SCREEN",
+    "mouse_click":     "CLICK",
+    "mouse_drag":      "DRAG",
+    "keyboard_type":   "TYPE",
+    "keyboard_delete": "DELETE",
+    "page_scroll":     "SCROLL",
+    "drawing":         "DRAW",
+    "view_change":     "VIEW",
+    "inactivity":      "IDLE",
+    "system":          "SYSTEM",
+    "mouse_move":      "MOVE",
+    "mouse_hover":     "HOVER",
+}
 
 def get_app_context_around(events: List[TranscriptEvent],
                             utterance_idx: int,
@@ -18,15 +37,9 @@ def get_app_context_around(events: List[TranscriptEvent],
         if e.event_type == "utterance":
             continue
         if abs(e.seconds - center_time) <= window_seconds:
-            # Summarize the event concisely
-            if e.event_type == "app_switch":
-                app_lines.append(f"[SCREEN: {e.text}]")
-            elif e.event_type == "mouse_click":
-                app_lines.append(f"[CLICK: {e.text}]")
-            elif e.event_type == "mouse_drag":
-                app_lines.append(f"[DRAG: {e.text}]")
-            elif e.event_type == "keyboard_type":
-                app_lines.append(f"[TYPE: {e.text}]")
+            tag = EVENT_TAG.get(e.event_type)
+            if tag:
+                app_lines.append(f"[{tag}: {e.text}]")
 
     return " ".join(app_lines)
 
@@ -39,11 +52,6 @@ def make_windowed_examples(events: List[TranscriptEvent],
     Utterances are indexed by their position among utterances only,
     matching the output of print_indices.py.
     """
-    utterances = [(utt_idx, e) for utt_idx, e in enumerate(
-        e for e in events if e.event_type == "utterance"
-    )]
-
-    # We also need the original event index for app context lookup
     utterance_events = [e for e in events if e.event_type == "utterance"]
 
     examples = []
@@ -88,8 +96,24 @@ def make_windowed_examples(events: List[TranscriptEvent],
 
 def load_all_data(transcript_files: List[str],
                   label_files: List[str]) -> List[Dict[str, Any]]:
+    """
+    Match each transcript to its label file by filename stem (a transcript's
+    .md.txt pairs with a same-stemmed .md.json label file) rather than by
+    list position — transcript_files and label_files commonly differ in
+    length and sort order, so zipping them positionally pairs the wrong
+    sessions together. Transcripts without a label file are skipped.
+    """
+    label_by_stem = {
+        os.path.splitext(os.path.basename(f))[0]: f for f in label_files
+    }
+
     all_examples = []
-    for transcript_fp, label_fp in zip(transcript_files, label_files):
+    for transcript_fp in transcript_files:
+        stem = os.path.splitext(os.path.basename(transcript_fp))[0]
+        label_fp = label_by_stem.get(stem)
+        if label_fp is None:
+            continue  # no hand-labels for this session yet
+
         events = parse_transcript(transcript_fp)
         labels = load_labels_from_json(label_fp)
 
@@ -132,10 +156,10 @@ if __name__ == "__main__":
 
     print(f"Found {len(transcript_files)} transcripts and {len(label_files)} label files")
 
-    if len(transcript_files) != len(label_files):
-        print("WARNING: mismatch between transcript and label file counts")
-
     all_examples = load_all_data(transcript_files, label_files)
+    matched_files = len(set(ex["source_file"] for ex in all_examples))
+    print(f"{matched_files} transcripts matched a label file by filename "
+          f"({len(transcript_files) - matched_files} have no labels yet and were skipped)")
 
     print(f"Total utterances: {len(all_examples)}")
 

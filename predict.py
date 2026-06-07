@@ -192,7 +192,7 @@ if __name__ == "__main__":
         help="Path to a single transcript file. If omitted, runs on all unlabeled files."
     )
     parser.add_argument(
-        "--transcript_dir", type=str, default="data/conversations",
+        "--transcript_dir", type=str, default="data/transcripts",
         help="Directory containing transcript .txt files."
     )
     parser.add_argument(
