@@ -10,11 +10,11 @@ from collections import defaultdict
 
 from prepare_data import load_all_data
 from label_schema import LABEL2ID, ID2LABEL
-from train import GoalDataset, MAX_LENGTH
+from train import MAX_LENGTH
 
 # ── Config ───────────────────────────────────────────────────────────────────
 MODEL_DIR        = "./results/best_model"   # path to your saved model
-MAX_LENGTH       = 384
+# MAX_LENGTH is imported from train so tokenization always matches training.
 OUTPUT_DIR       = "./evaluation"
 import os; os.makedirs(OUTPUT_DIR, exist_ok=True)
 

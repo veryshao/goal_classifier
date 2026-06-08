@@ -2,7 +2,7 @@ import json
 import os
 from typing import List, Dict, Any
 from parse_transcript import parse_transcript, TranscriptEvent
-from label_schema import LABEL2ID, GOAL_APP_SIGNALS
+from label_schema import LABEL2ID
 
 # Concise tag used to summarize each non-utterance event type in [APP_CTX].
 # Covers every event_type produced by parse_transcript's EVENT_TYPE_MAP so

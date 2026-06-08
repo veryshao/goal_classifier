@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Model weights and optimizer states — large binary files unsuitable for git.
+# Store model artifacts in external storage (HuggingFace Hub, Google Drive, etc.)
+# Keeps small metadata (trainer_state.json, config.json, training_args.bin).
+*.safetensors
+optimizer.pt
+rng_state.pth
+
+# Evaluation outputs — fully regeneratable from evaluate.py
+evaluation/

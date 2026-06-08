@@ -45,10 +45,15 @@ def parse_transcript(filepath: str) -> List[TranscriptEvent]:
 
     # ── Strip inline annotator comments ──────────────────────────────────────────
     # Comments appear as plain text between transcript events, e.g.:
-    # "Beginning of goal conversation" or "End of goal conversation"
-    import re
-    content = re.sub(r'\n?(Beginning of goal conversation|End of goal conversation)\n?', 
-                    ' ', content)
+    # "Beginning of goal conversation" or "End of goal conversation".
+    # Annotators sometimes used non-breaking spaces (\xa0) between the words,
+    # so match on \s+ (which covers \xa0) rather than literal ASCII spaces —
+    # a literal-space pattern silently fails to strip these and either glues
+    # the comment text onto an utterance or breaks UTTERANCE_RE's match.
+    content = re.sub(
+        r'\s*(Beginning\s+of\s+goal\s+conversation|End\s+of\s+goal\s+conversation)\s*',
+        ' ', content
+    )
 
     events = []
 

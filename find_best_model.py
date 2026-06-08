@@ -5,14 +5,35 @@ from prepare_data import load_labels_from_json
 BEST_MODEL_DIR = "results/best_model"
 
 
+def fold_stem(fold_name: str) -> str:
+    """Strip ALL extensions from a fold directory basename.
+
+    Fold dirs may be named '<stem>.md.txt' (created when transcripts still
+    used that extension) or '<stem>.txt' — os.path.splitext only strips the
+    last extension, so we loop until nothing remains.
+    """
+    name = fold_name
+    while True:
+        root, ext = os.path.splitext(name)
+        if not ext:
+            break
+        name = root
+    return name
+
+
+def is_loo_fold(fold_name: str) -> bool:
+    """True only if this results/ subdirectory corresponds to an actual LOO fold.
+
+    Non-LOO directories (e.g. results/single/ from train_single.py) don't
+    map to any transcript file, so they are excluded from fold statistics.
+    """
+    stem = fold_stem(fold_name)
+    return os.path.exists(os.path.join("data/transcripts", f"{stem}.txt"))
+
+
 def has_BE_support(fold_name: str) -> bool:
-    """
-    True if the held-out conversation for this fold has at least one B and
-    one E in its ground-truth labels — i.e. eval_f1_macro for that fold
-    actually reflects boundary-detection performance rather than being
-    inflated/deflated by a held-out session with no goal-discussion span.
-    """
-    stem = os.path.splitext(fold_name)[0]
+    """True if the held-out conversation has at least one B and one E label."""
+    stem = fold_stem(fold_name)
     label_path = os.path.join("data/labels", f"{stem}.json")
     if not os.path.exists(label_path):
         return False
@@ -23,7 +44,10 @@ def has_BE_support(fold_name: str) -> bool:
 rows = []
 for fold_dir in sorted(glob.glob("results/*/")):
     fold_dir = fold_dir.rstrip("/")
-    if not os.path.isdir(fold_dir) or os.path.basename(fold_dir) == "best_model":
+    fold_name = os.path.basename(fold_dir)
+    if not os.path.isdir(fold_dir) or fold_name == "best_model":
+        continue
+    if not is_loo_fold(fold_name):
         continue
     ckpts = glob.glob(os.path.join(fold_dir, "checkpoint-*"))
     if not ckpts:

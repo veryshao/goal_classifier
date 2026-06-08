@@ -1,11 +1,8 @@
 import json
 import glob
-import sys
 import torch
-import numpy as np
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
-from torch.utils.data import Dataset
-from prepare_data import load_all_data, make_windowed_examples
+from prepare_data import make_windowed_examples
 from parse_transcript import parse_transcript
 from label_schema import LABEL2ID, ID2LABEL
 
@@ -17,25 +14,6 @@ REVIEW_LABELS = {"B", "E"}
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 model     = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR)
 model.eval()
-
-# ── Dataset ───────────────────────────────────────────────────────────────────
-class GoalDataset(Dataset):
-    def __init__(self, examples):
-        self.examples = examples
-
-    def __len__(self):
-        return len(self.examples)
-
-    def __getitem__(self, idx):
-        ex = self.examples[idx]
-        enc = tokenizer(ex["text"], max_length=MAX_LENGTH,
-                        padding="max_length", truncation=True,
-                        return_tensors="pt")
-        return {
-            "input_ids":      enc["input_ids"].squeeze(),
-            "attention_mask": enc["attention_mask"].squeeze(),
-            "labels":         torch.tensor(ex["label_id"], dtype=torch.long)
-        }
 
 # ── Predict on a single file ──────────────────────────────────────────────────
 
@@ -140,6 +118,23 @@ def review_predictions(results: list[dict],
             confirmed_labels[str(r["utterance_idx"])] = final_label
 
         print()
+
+    # Fill in "I" for every utterance strictly between a confirmed B and its
+    # confirmed E — by definition (label_schema.py) everything in that range
+    # is "I", and leaving those indices out of the saved JSON would make them
+    # default to "O" on reload, turning a B..I..E span into B..O..E.
+    boundary_idxs = sorted(
+        int(idx) for idx, lbl in confirmed_labels.items() if lbl in ("B", "E")
+    )
+    i = 0
+    while i + 1 < len(boundary_idxs):
+        b_idx, e_idx = boundary_idxs[i], boundary_idxs[i + 1]
+        if confirmed_labels[str(b_idx)] == "B" and confirmed_labels[str(e_idx)] == "E":
+            for between_idx in range(b_idx + 1, e_idx):
+                confirmed_labels.setdefault(str(between_idx), "I")
+            i += 2
+        else:
+            i += 1
 
     return confirmed_labels
 
