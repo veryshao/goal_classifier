@@ -23,4 +23,4 @@ for i, m in enumerate(matches):
     timestamp = m.group(1)
     speaker   = m.group(2)
     text      = m.group(3).strip()
-    print(f"{i:>5}  [{timestamp}]  {speaker:>8}  {text[:70]}")
+    print(f"{i:>5}  [{timestamp}]  {speaker:>8}  {text}")

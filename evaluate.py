@@ -22,7 +22,7 @@ tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
 # ── Load all data (same as train.py) ─────────────────────────────────────────
 transcript_files = sorted(glob.glob("data/transcripts/*.txt"))
-label_files      = sorted(glob.glob("data/labels/*.json"))
+label_files      = sorted(glob.glob("data/eval_labels/*.json"))
 all_examples     = load_all_data(transcript_files, label_files)
 
 # ── Run inference ─────────────────────────────────────────────────────────────
