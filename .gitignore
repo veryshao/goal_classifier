@@ -12,6 +12,3 @@ __pycache__/
 *.safetensors
 optimizer.pt
 rng_state.pth
-
-# Evaluation outputs — fully regeneratable from evaluate.py
-evaluation/
