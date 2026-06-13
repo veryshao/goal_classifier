@@ -26,23 +26,34 @@ label_files      = sorted(glob.glob("data/eval_labels/*.json"))
 all_examples     = load_all_data(transcript_files, label_files)
 
 # ── Run inference ─────────────────────────────────────────────────────────────
+device = torch.device("cuda" if torch.cuda.is_available()
+                      else "mps"  if torch.backends.mps.is_available()
+                      else "cpu")
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR)
+model.to(device)
 model.eval()
+print(f"Running inference on {device} over {len(all_examples)} examples …")
 
+INFER_BATCH = 32
 all_preds, all_labels, all_examples_with_preds = [], [], []
 
-for ex in all_examples:
-    enc = tokenizer(ex["text"], max_length=MAX_LENGTH,
-                    padding="max_length", truncation=True,
-                    return_tensors="pt")
+for start in range(0, len(all_examples), INFER_BATCH):
+    batch = all_examples[start : start + INFER_BATCH]
+    enc = tokenizer(
+        [ex["text"] for ex in batch],
+        max_length=MAX_LENGTH, padding="max_length",
+        truncation=True, return_tensors="pt"
+    )
+    enc = {k: v.to(device) for k, v in enc.items()}
     with torch.no_grad():
         logits = model(**enc).logits
-    pred_id   = torch.argmax(logits, dim=-1).item()
-    pred_label = ID2LABEL[pred_id]
+    pred_ids = torch.argmax(logits, dim=-1).tolist()
 
-    all_preds.append(pred_id)
-    all_labels.append(ex["label_id"])
-    all_examples_with_preds.append({**ex, "pred": pred_label, "pred_id": pred_id})
+    for ex, pred_id in zip(batch, pred_ids):
+        pred_label = ID2LABEL[pred_id]
+        all_preds.append(pred_id)
+        all_labels.append(ex["label_id"])
+        all_examples_with_preds.append({**ex, "pred": pred_label, "pred_id": pred_id})
 
 # ── 1. Overall classification report ─────────────────────────────────────────
 print("\n=== Classification Report ===")
