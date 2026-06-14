@@ -59,7 +59,7 @@ for start in range(0, len(all_examples), INFER_BATCH):
 print("\n=== Classification Report ===")
 report = classification_report(
     all_labels, all_preds,
-    target_names=["O", "B", "I", "E"],
+    target_names=["O", "I"],
     zero_division=0
 )
 print(report)
@@ -67,9 +67,9 @@ with open(f"{OUTPUT_DIR}/classification_report.txt", "w") as f:
     f.write(report)
 
 # ── 2. Confusion matrix ───────────────────────────────────────────────────────
-cm = confusion_matrix(all_labels, all_preds, labels=[0,1,2,3])
-fig, ax = plt.subplots(figsize=(6,5))
-disp = ConfusionMatrixDisplay(cm, display_labels=["O","B","I","E"])
+cm = confusion_matrix(all_labels, all_preds, labels=[0, 1])
+fig, ax = plt.subplots(figsize=(5, 4))
+disp = ConfusionMatrixDisplay(cm, display_labels=["O", "I"])
 disp.plot(ax=ax, colorbar=False, cmap="Blues")
 ax.set_title("Confusion Matrix")
 plt.tight_layout()
@@ -135,20 +135,5 @@ for conv, data in sorted(per_conv.items()):
 
 with open(f"{OUTPUT_DIR}/per_conversation_f1.json", "w") as f:
     json.dump(conv_scores, f, indent=2)
-
-# ── 5. Boundary detection specifically ───────────────────────────────────────
-# B and E are the labels you actually care about most — report them separately
-
-print("\n=== Boundary Label Deep Dive (B and E only) ===")
-for target_label in ["B", "E"]:
-    target_id   = LABEL2ID[target_label]
-    true_pos    = sum(1 for t, p in zip(all_labels, all_preds) if t == target_id and p == target_id)
-    false_neg   = sum(1 for t, p in zip(all_labels, all_preds) if t == target_id and p != target_id)
-    false_pos   = sum(1 for t, p in zip(all_labels, all_preds) if t != target_id and p == target_id)
-    precision   = true_pos / (true_pos + false_pos)  if (true_pos + false_pos)  else 0
-    recall      = true_pos / (true_pos + false_neg)  if (true_pos + false_neg)  else 0
-    f1          = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0
-    print(f"  {target_label}  precision={precision:.2f}  recall={recall:.2f}  F1={f1:.2f}  "
-          f"(TP={true_pos}, FN={false_neg}, FP={false_pos})")
 
 print(f"\nAll evaluation outputs written to ./{OUTPUT_DIR}/")

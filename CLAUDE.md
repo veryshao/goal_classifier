@@ -4,158 +4,147 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A research project that classifies utterances in tutoring-session transcripts according to whether they
-fall **Outside / at the Begin / Inside / at the End (O/B/I/E)** of a "goal-setting discussion" span. It's
-a per-utterance sequence-tagging task built on top of a `bert-base-uncased` sequence classifier
-(`transformers` + `torch`).
+A research project that classifies utterances in tutoring-session transcripts as either **Outside (O)**
+or **Inside (I)** a goal-setting discussion. It's a per-utterance binary sequence-tagging task with
+two approaches:
+
+1. **BERT classifier** — `bert-base-uncased` fine-tuned for 2-class O/I sequence classification
+   (`transformers` + `torch`).
+2. **Embedding classifier** — OpenAI `text-embedding-3-large` embeddings with ±2 neighbor windowed
+   features, trained with a `LogisticRegression` LOO classifier (`openai` + `scikit-learn`).
 
 There is no build system, package manifest, or test suite — this is a small data-science script
-collection run directly with `python <script>.py`. Dependencies (inferred from imports) include
-`torch`, `transformers`, `scikit-learn`, `matplotlib`, `numpy`.
+collection run directly with `python <script>.py`. Dependencies: `torch`, `transformers`,
+`scikit-learn`, `matplotlib`, `numpy`, `openai`.
 
 ## Commands
 
-- Inspect how a transcript parses: `python parse_transcript.py data/transcripts/<file>.md.txt`
-- List utterances with their indices (used to figure out which index to put in a label file when
-  hand-labeling): `python print_indices.py data/transcripts/<file>.md.txt`
-- Inspect data loading / windowed examples end-to-end: `python prepare_data.py` — globs all
-  transcript+label pairs, prints the label distribution, and shows a sample non-`O` example.
+- Inspect how a transcript parses: `python parse_transcript.py data/transcripts/<file>.txt`
+- List utterances with their indices (needed for hand-labeling): `python print_indices.py data/transcripts/<file>.txt`
+- Inspect data loading / windowed examples end-to-end: `python prepare_data.py`
 - Train (leave-one-conversation-out): `python train.py` — fine-tunes `bert-base-uncased` once per
   held-out transcript, writing per-fold checkpoints to `./results/<conversation_name>/`.
-- Run evaluation against a trained model: `python evaluate.py` — expects a fine-tuned model at
-  `./results/best_model` and writes a classification report, confusion matrix, error analysis, and
-  per-conversation F1 to `./evaluation/`.
+- Pick and install best model checkpoint: `python find_best_model.py` — ranks all LOO folds by
+  macro-F1, picks the best fold with at least one `I` label in its held-out conversation, and
+  copies that checkpoint to `./results/best_model/`. Run this after `train.py` and before
+  `evaluate.py` or `predict.py`.
+- Run evaluation: `python evaluate.py` — expects a fine-tuned model at `./results/best_model`,
+  writes classification report, confusion matrix, error analysis, and per-conversation F1 to `./evaluation/`.
 - Predict + bootstrap-label new sessions: `python predict.py [--file <path>] [--auto]` — runs the
-  saved `./results/best_model` over transcripts (by default, every transcript in
-  `data/conversations/` lacking a label file in `data/labels/`), interactively reviews flagged `B`/`E`
-  predictions (unless `--auto` is passed), and writes confirmed labels back to `data/labels/`.
+  saved `./results/best_model` over transcripts, interactively reviews flagged `I` predictions
+  (unless `--auto` is passed), and writes confirmed labels to `data/labels/`.
+- Compute and cache OpenAI embeddings, run LOO logistic regression: `python embed.py`
 
-There is no lint/test command configured. To exercise an individual piece, run the relevant module's
-`__main__` block directly (e.g. `parse_transcript.py` and `print_indices.py` both take a transcript path
-as `argv[1]`).
+There is no lint/test command. To exercise an individual piece, run the relevant module directly.
+
+Detailed pipeline walkthroughs live in `docs/`: `bert_pipeline.md` and `embed_pipeline.md`.
 
 ## Pipeline / architecture
 
 Data flows through these stages:
 
-1. **`data/transcripts/*.md.txt`** — raw session transcripts. Each file starts with a metadata header
-   line `(school=..., teacher=..., session_date=..., session_time=..., tutor=...)` followed by inline
-   timestamped content all on one logical stream:
+1. **`data/transcripts/*.txt`** — raw session transcripts. Each file starts with a metadata header
+   line `(school=..., teacher=..., session_date=..., session_time=..., tutor=...)` followed by
+   timestamped content:
    - utterances: `[mm:ss] Tutor|Student (Name): text`
    - interaction/app events: `[mm:ss] [app_switch|mouse click|keyboard type|... event: details]`
-   Filenames encode `School##_Teacher##_<date>_<time>_Stu_<id>` and a transcript's `.md.txt` pairs with
-   a same-named `.md.json` label file.
+   Filenames encode `School##_Teacher##_<date>_<time>_Stu_<id>`.
 
 2. **`parse_transcript.py`** — regex-based parser (`UTTERANCE_RE`, `APP_EVENT_RE`) that turns a
-   transcript file into a flat, timestamp-sorted list of `TranscriptEvent` dataclass instances
-   (`event_type` is one of `utterance` or an interaction type like `app_switch`/`mouse_click`/etc.).
-   Timestamps may be `mm:ss` or `h:mm:ss` (sessions can run past an hour) — both the regexes and
-   `timestamp_to_seconds` handle either form. Note: transcripts can interleave multiple student/tutor
+   transcript file into a flat, timestamp-sorted list of `TranscriptEvent` dataclass instances.
+   Timestamps may be `mm:ss` or `h:mm:ss`. Note: transcripts can interleave multiple student/tutor
    pairs, so sorting by `seconds` is only an approximation of true chronological order.
 
-3. **`print_indices.py`** — prints `[index] [timestamp] [speaker] text` for every utterance matched by
-   `UTTERANCE_RE` in a transcript. The printed `index` is the value used as the key in label JSON files
-   (see below) — this script is the human labeling aid.
+3. **`print_indices.py`** — prints `[index] [timestamp] [speaker] text` for every utterance in
+   timestamp-sorted order (via `parse_transcript`). The printed index is the key used in label JSON
+   files — this script is the human labeling aid.
 
-4. **`data/labels/*.md.json`** — sparse span annotations: a JSON object mapping an utterance **index**
-   (string, matching the order from `print_indices.py`/`UTTERANCE_RE`) to `"B"` (begin of a
-   goal-discussion span) or `"E"` (end of one). An empty object `{}` means the session has no
-   goal-discussion span; some files are entirely empty/not-yet-labeled. The full O/B/I/E sequence is
-   expected to be derived by expanding these sparse begin/end markers across the utterance sequence
-   (everything between a B and its matching E becomes `I`, everything else `O`).
+4. **`data/labels/*.json`** — sparse O/I annotations: a JSON object mapping an utterance **index**
+   (string, 0-based among utterances only) to `"I"`. An empty object `{}` means the session has no
+   goal-discussion; unlisted utterances default to `"O"`. Legacy `"B"`/`"E"` values from an older
+   4-class scheme are silently mapped to `"I"` by `load_labels_from_json`.
 
-5. **`build_label_json.py`** — a one-off templated helper: paste `(event_index, label)` pairs (read off
-   from `print_indices.py`) into the `ANNOTATIONS` list and run it; it fills in `"O"` for everything
-   else and writes the result to `data/labels/session1_labels.json`. Note the output filename is
-   hardcoded — it's meant to be hand-edited per session, not run as a general batch tool.
+5. **`build_label_json.py`** — a one-off templated helper for creating label files from
+   `print_indices.py` output. The output filename is hardcoded (`session1_labels.json`) — hand-edit
+   it per session.
 
-6. **`label_schema.py`** — defines `LABEL2ID`/`ID2LABEL` for the four-class `O/B/I/E` scheme
-   (`O=0, B=1, I=2, E=3`), human-annotation guidance for what counts as `B`/`E`/`I`/`O`, and two
-   heuristic signal lists used to spot goal-discussion cues: `GOAL_APP_SIGNALS` (screen/app-event
-   strings like `"PLUS Students"`, `"Update Goals button"`, slider drags) and `GOAL_VERBAL_SIGNALS`
-   (keywords like `"goal"`, `"minutes"`, `"skill"`, `"share my screen"`).
+6. **`label_schema.py`** — defines `LABEL2ID`/`ID2LABEL` for the 2-class O/I scheme (`O=0, I=1`),
+   annotation guidance for what counts as `I` vs `O`, and two heuristic signal lists:
+   `GOAL_APP_SIGNALS` and `GOAL_VERBAL_SIGNALS`.
 
 7. **`prepare_data.py`** — turns parsed events + sparse labels into model-ready examples:
-   - `get_app_context_around` collects non-utterance events within ±30s of an utterance and renders
-     each via the `EVENT_TAG` map into tags like `[SCREEN: ...]` / `[CLICK: ...]` / `[DRAG: ...]` /
-     `[TYPE: ...]` / `[VIEW: ...]` / `[SCROLL: ...]` / etc. — every `event_type` produced by
-     `parse_transcript`'s `EVENT_TYPE_MAP` is covered, so no interaction signal is silently dropped
-     from the model's screen-context window.
-   - `make_windowed_examples` builds, per utterance, a `[SEP]`-joined window of `±2` surrounding
-     utterances with the target wrapped in `[TARGET] ...`, appending an `[APP_CTX] ...` suffix with
-     the screen-context string — this is the final `text` fed to the model. Utterances are indexed by
-     their position among utterances only (`event_idx`), matching `print_indices.py`'s output and the
-     keys used in the label JSON files.
-   - `load_labels_from_json` reads the sparse `{"index": "B"|"E"|"I"}` label dict.
-   - `load_all_data(transcript_files, label_files)` ties it together: matches each transcript to its
-     label file **by filename stem** (a transcript's `.md.txt` pairs with a same-stemmed `.md.json`
-     label file), skipping transcripts that have no label file yet — the two glob lists commonly
-     differ in length and sort order, so pairing them positionally would mismatch sessions. For
-     matched pairs it fills unlabeled utterances with `"O"`, builds windowed examples, and tags each
-     with `source_file` (used for leave-one-out splitting). Returns dicts with `text`, `label`,
+   - `get_app_context_around` collects non-utterance events within ±30s and renders them as tags
+     like `[SCREEN: ...]` / `[CLICK: ...]` / `[DRAG: ...]` / etc.
+   - `make_windowed_examples` builds, per utterance, a `[SEP]`-joined window of ±2 surrounding
+     utterances with the target wrapped in `[TARGET] ...`, plus an `[APP_CTX] ...` suffix.
+     Utterances are indexed by position among utterances only (`event_idx`), matching
+     `print_indices.py` output and the keys in label JSON files.
+   - `load_labels_from_json` reads the sparse label dict; maps legacy B/E → I.
+   - `load_all_data(transcript_files, label_files)` matches files by filename stem, skips unmatched
+     transcripts, fills unlabeled utterances with `"O"`, and returns dicts with `text`, `label`,
      `label_id`, `source_file`, `timestamp`, and `event_idx` keys.
 
-8. **`train.py`** — fine-tunes `bert-base-uncased` (`AutoModelForSequenceClassification`, 4 labels)
-   for the O/B/I/E task. Module-level: config constants, `tokenizer`, `GoalDataset` (wraps examples
-   for the HF `Trainer`, tokenizing to `MAX_LENGTH = 384`), and `WeightedTrainer` (weighted
-   cross-entropy via a `class_weights` tensor passed into its constructor — this is recomputed inside
-   each fold from that fold's *training* split only, via `compute_class_weight("balanced", ...)`, so a
-   held-out conversation's label distribution never leaks into its own fold's loss). The actual data
-   loading and training only run under `if __name__ == "__main__":`, since `evaluate.py` imports
-   `GoalDataset`/`MAX_LENGTH` from this module and must not trigger a full training run as a side
-   effect of that import. The `__main__` block runs **leave-one-conversation-out (LOO)**
-   cross-validation: for each transcript held out in turn, trains on the rest and evaluates on it,
-   tracking `f1_macro` and saving per-fold checkpoints to `./results/<conversation_name>/`.
-   (`evaluate.py` separately expects a single chosen-best checkpoint copied/symlinked to
-   `./results/best_model`.)
+8. **`train.py`** — fine-tunes `bert-base-uncased` (`AutoModelForSequenceClassification`, 2 labels)
+   for the O/I task. Module-level: config constants, `tokenizer` (`MAX_LENGTH = 384`), `GoalDataset`,
+   and `WeightedTrainer` (weighted cross-entropy; class weights recomputed per-fold from training
+   split only). Data loading and LOO training live inside `if __name__ == "__main__":` — keep it
+   that way, because `evaluate.py` imports `MAX_LENGTH` from this module and must not trigger a
+   training run as a side effect.
 
-9. **`evaluate.py`** — loads all transcripts+labels via `load_all_data`, runs the saved model from
-   `./results/best_model` over every example, and writes to `./evaluation/`:
-   - `classification_report.txt` (per-class precision/recall/F1 over O/B/I/E)
+9. **`find_best_model.py`** — post-training utility that ranks all LOO fold checkpoints under
+   `./results/*/` by their `best_metric` (macro-F1) from `trainer_state.json`, filters to folds
+   whose held-out conversation has at least one `I` label, picks the top-scoring eligible fold, and
+   copies its best checkpoint to `./results/best_model/` (overwriting any prior contents). Run this
+   after `train.py` completes and before `evaluate.py` or `predict.py`.
+
+11. **`evaluate.py`** — loads all transcripts+labels via `load_all_data` (from `data/eval_labels/`),
+   runs batched inference (batch size 32, CUDA→MPS→CPU device placement) over the saved model from
+   `./results/best_model`, and writes to `./evaluation/`:
+   - `classification_report.txt` (O/I precision/recall/F1)
    - `confusion_matrix.png`
-   - `error_analysis.json` (misclassified examples grouped by `(true, pred)` label pair)
-   - `per_conversation_f1.json` (macro-F1 per source transcript — useful for leave-one-out style analysis)
-   - console deep-dive on `B`/`E` boundary precision/recall/F1 specifically, since correctly finding the
-     *boundaries* of a goal-discussion span is the metric that matters most for this task.
+   - `error_analysis.json` (misclassified examples grouped by `(true, pred)`)
+   - `per_conversation_f1.json` (macro-F1 per source transcript)
 
-10. **`predict.py`** — inference + active/bootstrap-labeling tool built on the saved
-    `./results/best_model`:
-    - `predict_file` runs the model over every utterance in a transcript (using
-      `make_windowed_examples` with placeholder `"O"` labels) and returns predictions with confidence
-      and full per-class probabilities.
-    - `review_predictions` is an interactive human-in-the-loop reviewer: it prints each utterance
-      predicted `B` or `E` with its context window and probabilities and lets you accept the model's
-      label or override it from the keyboard (`B`/`I`/`E`/`O`).
-    - `save_label_json` writes confirmed labels to `data/labels/<transcript_stem>.json`, matching the
-      transcript's naming convention.
-    - `get_unlabeled_files` finds transcripts in `--transcript_dir` (default `data/conversations`,
-      though transcripts currently live in `data/transcripts`) without a corresponding label file.
-    - CLI: `--file <path>` for a single transcript (default: batch over all unlabeled files),
-      `--auto` to skip interactive review and save raw `B`/`E`/`I` predictions directly. This is the
-      bootstrap loop for growing the labeled set: train → predict on unlabeled sessions →
-      human-confirm flagged `B`/`E` candidates → retrain.
+10. **`predict.py`** — inference + bootstrap-labeling tool:
+    - `predict_file` runs the model over every utterance in a transcript (utterance-only index space,
+      0-based) and returns predictions with confidence and per-class probabilities.
+    - `review_predictions` is an interactive reviewer: prints each utterance predicted `I` with its
+      context window and lets you accept or override from the keyboard (`I`/`O`).
+    - `save_label_json` writes confirmed labels to `data/labels/<transcript_stem>.json`.
+    - `get_unlabeled_files` finds transcripts without a matching label file.
+    - CLI: `--file <path>` for a single transcript, `--auto` to skip review.
+    - Uses CUDA→MPS→CPU device placement; imports `MAX_LENGTH` from `train`.
+
+12. **`embed.py`** — OpenAI embedding pipeline + logistic regression classifier, mirroring the BERT
+    pipeline's train/eval split:
+    - Embeds each utterance as `"<speaker>: <text>"` via `text-embedding-3-large`.
+    - Caches per-transcript embeddings as `embeddings_cache/<stem>.npy` (float32, shape
+      `(n_utterances, 3072)`). Cache files are gitignored and reproducible from the API.
+    - Builds windowed feature vectors by concatenating embeddings for indices `[n-2, n-1, n, n+1,
+      n+2]` with zero-padding at boundaries → feature dim = 15 360.
+    - Trains `LogisticRegression(class_weight="balanced")` on all `data/labels/` examples, then
+      evaluates on all `data/eval_labels/` examples. Writes classification report, confusion matrix,
+      and per-conversation F1 to `evaluation_embed/`.
 
 ## Working in this codebase
 
-- The example `text` format (`[SEP]`-joined context with a `[TARGET]` marker, plus an `[APP_CTX]`
-  suffix) is defined in `prepare_data.make_windowed_examples` and consumed as-is by `train.py`,
-  `evaluate.py`, and `predict.py` — keep them in sync if you change it (e.g. `evaluate.py` and
-  `predict.py` both split on `"[SEP]"` and look for `"[TARGET]"` to recover the target utterance for
-  display/error-analysis).
-- `LABEL2ID`/`ID2LABEL` and the `["O","B","I","E"]` ordering must stay consistent across
-  `label_schema.py`, `prepare_data.py`, `train.py`, `evaluate.py`, and `predict.py` — `evaluate.py`
-  hardcodes `target_names=["O","B","I","E"]` and `labels=[0,1,2,3]` for the confusion matrix.
-- Not every transcript has a corresponding label file (and some label files are empty/blank rather than
-  `{}`) — `load_all_data` matches transcripts to labels by filename stem and skips any transcript
-  without a label file, then defaults unlabeled utterances within a matched session to `"O"`.
-- `evaluate.py` and `predict.py` expect a single consolidated checkpoint at `./results/best_model`,
-  but `train.py`'s LOO loop writes one checkpoint per held-out conversation under
-  `./results/<conversation_name>/` — you need to pick/copy the best fold's checkpoint into
-  `./results/best_model` yourself before running evaluation or prediction.
-- `train.py`'s data loading and LOO training loop live inside `if __name__ == "__main__":` —
-  keep it that way. `evaluate.py` imports `GoalDataset`/`MAX_LENGTH` from `train`, and any code that
-  runs at `train` import time (data loading, tokenizer init, `trainer.train()`) would fire as a side
-  effect of that import.
-- `evaluate.py` and `predict.py` run their own model-loading/inference logic at module level rather
-  than under a `__main__` guard. That's fine as-is because nothing imports either of them — but don't
-  add an import of `evaluate` or `predict` from elsewhere without first guarding that code.
+- **Label scheme is O/I only** — `LABEL2ID = {"O": 0, "I": 1}`. All B/E annotations in the data
+  files were converted; `load_labels_from_json` maps any remaining legacy B/E → I defensively. Do
+  not reintroduce B/E without updating `label_schema.py`, `train.py`, `evaluate.py`, `predict.py`,
+  and `embed.py` consistently.
+- **Utterance index space** — indices are 0-based positions among utterances only, not among all
+  events. `print_indices.py`, `make_windowed_examples`, `predict_file`, and `load_labels_from_json`
+  all use this convention. Never index by position in the full `events` list.
+- The example `text` format (`[SEP]`-joined context with `[TARGET]` and `[APP_CTX]`) is defined in
+  `prepare_data.make_windowed_examples` and consumed as-is by `train.py`, `evaluate.py`, and
+  `predict.py` — keep them in sync if you change it.
+- `evaluate.py` and `predict.py` expect a single consolidated checkpoint at `./results/best_model`.
+  `train.py`'s LOO loop writes one checkpoint per fold under `./results/<conversation_name>/` —
+  pick the best fold and copy it to `./results/best_model` before running eval or prediction.
+- `train.py`'s data loading and LOO training loop live inside `if __name__ == "__main__":` — keep
+  it that way. `evaluate.py` imports `MAX_LENGTH` from `train`; any code at `train` import time
+  would fire as a side effect.
+- `evaluate.py` and `predict.py` run their model-loading/inference logic at module level. That's
+  fine because nothing imports either of them — but guard that code before adding such an import.
+- All data files (`data/`, `results/`, `evaluation/`, `embeddings_cache/`) are gitignored. Never
+  commit transcripts, labels, embeddings, or model weights.

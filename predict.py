@@ -5,14 +5,18 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from prepare_data import make_windowed_examples
 from parse_transcript import parse_transcript
 from label_schema import LABEL2ID, ID2LABEL
+from train import MAX_LENGTH
 
 # ── Config ────────────────────────────────────────────────────────────────────
-MODEL_DIR  = "./results/best_model"
-MAX_LENGTH = 384
-REVIEW_LABELS = {"B", "E"}
+MODEL_DIR     = "./results/best_model"
+REVIEW_LABELS = {"I"}
 
+device    = torch.device("cuda" if torch.cuda.is_available()
+                         else "mps"  if torch.backends.mps.is_available()
+                         else "cpu")
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 model     = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR)
+model.to(device)
 model.eval()
 
 # ── Predict on a single file ──────────────────────────────────────────────────
@@ -24,10 +28,11 @@ def predict_file(transcript_path: str) -> list[dict]:
     """
     events = parse_transcript(transcript_path)
 
-    # Build examples with all labels set to O (placeholder — we're predicting)
-    utterance_indices = [i for i, e in enumerate(events)
-                         if e.event_type == "utterance"]
-    placeholder_labels = {i: "O" for i in utterance_indices}
+    # Build examples with all labels set to O (placeholder — we're predicting).
+    # Index by utterance position only (0-based among utterances), matching
+    # print_indices.py and the keys used in label JSON files.
+    utterance_events   = [e for e in events if e.event_type == "utterance"]
+    placeholder_labels = {i: "O" for i in range(len(utterance_events))}
 
     examples = make_windowed_examples(events, placeholder_labels)
 
@@ -40,6 +45,7 @@ def predict_file(transcript_path: str) -> list[dict]:
             truncation=True,
             return_tensors="pt"
         )
+        enc = {k: v.to(device) for k, v in enc.items()}
         with torch.no_grad():
             logits = model(**enc).logits
 
@@ -67,22 +73,22 @@ def get_target_utterance(windowed_text: str) -> str:
     return windowed_text[:120]
 
 
-# ── Interactive review of B and E predictions ─────────────────────────────────
+# ── Interactive review of I predictions ──────────────────────────────────────
 
 def review_predictions(results: list[dict],
                         transcript_path: str) -> dict[str, str]:
     """
-    Print each predicted B or E for human review.
+    Print each predicted I for human review.
     Returns a label dict ready to save as a label JSON.
     """
     flagged = [r for r in results if r["pred"] in REVIEW_LABELS]
     confirmed_labels = {}
 
     if not flagged:
-        print("  No B or E predictions — all utterances predicted O.")
+        print("  No I predictions — all utterances predicted O.")
         return confirmed_labels
 
-    print(f"\n  {len(flagged)} utterance(s) predicted as B or E. Review each:\n")
+    print(f"\n  {len(flagged)} utterance(s) predicted as I. Review each:\n")
 
     for r in flagged:
         target = get_target_utterance(r["text"])
@@ -118,23 +124,6 @@ def review_predictions(results: list[dict],
             confirmed_labels[str(r["utterance_idx"])] = final_label
 
         print()
-
-    # Fill in "I" for every utterance strictly between a confirmed B and its
-    # confirmed E — by definition (label_schema.py) everything in that range
-    # is "I", and leaving those indices out of the saved JSON would make them
-    # default to "O" on reload, turning a B..I..E span into B..O..E.
-    boundary_idxs = sorted(
-        int(idx) for idx, lbl in confirmed_labels.items() if lbl in ("B", "E")
-    )
-    i = 0
-    while i + 1 < len(boundary_idxs):
-        b_idx, e_idx = boundary_idxs[i], boundary_idxs[i + 1]
-        if confirmed_labels[str(b_idx)] == "B" and confirmed_labels[str(e_idx)] == "E":
-            for between_idx in range(b_idx + 1, e_idx):
-                confirmed_labels.setdefault(str(between_idx), "I")
-            i += 2
-        else:
-            i += 1
 
     return confirmed_labels
 
@@ -196,7 +185,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--auto", action="store_true",
-        help="Skip interactive review and save raw predictions directly."
+        help="Skip interactive review and save raw I predictions directly."
              " Use only if you trust the model enough to skip review."
     )
     args = parser.parse_args()

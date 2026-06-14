@@ -1,23 +1,19 @@
-# Label schema for goal conversation boundary detection
+# Label schema for goal conversation detection
 # Applied at the UTTERANCE level only (non-utterance events provide context)
 
 LABEL2ID = {
-    "O": 0,   # Outside any goal conversation
-    "B": 1,   # First utterance OF a goal conversation
-    "I": 2,   # Inside a goal conversation (not start/end)
-    "E": 3,   # Last utterance OF a goal conversation
+    "O": 0,   # Outside any goal-setting discussion
+    "I": 1,   # Inside a goal-setting discussion
 }
 ID2LABEL = {v: k for k, v in LABEL2ID.items()}
 
 # Labeling rules (for human annotators):
-# B: The utterance where tutor first mentions goals/progress AND/OR
-#    immediately precedes a PLUS Students screen share
-#    e.g. "before we start...I'll share my screen. We can look at some of the goals"
-#
-# E: The utterance after which the tutor says "log into your math software"
-#    or the screen switches away from PLUS Students back to math content
-#
-# I: Any utterance between B and E (slider discussions, skill counts, etc.)
+# I: Any utterance that is part of a goal-setting discussion — includes the
+#    opening mention of goals, slider/skill-count discussion, and the closing
+#    transition back to math content.
+#    e.g. "before we start I'll share my screen so we can look at your goals"
+#    e.g. "the system recommends 30 minutes this week"
+#    e.g. "okay let's get into the math now"  (if still within the span)
 #
 # O: Everything else (math problem solving, greetings unrelated to goals, etc.)
 

@@ -16,6 +16,7 @@ rng_state.pth
 data/
 results/
 evaluation/
+evaluation_embed/
 evaluation_with_pred/
 
 # Cached embeddings (large, reproducible from the OpenAI API)

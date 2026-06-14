@@ -1,0 +1,112 @@
+# Embedding Pipeline
+
+Classifies goal-setting discussions using OpenAI `text-embedding-3-large` embeddings and a scikit-learn logistic regression classifier. Trains on `data/labels/` and evaluates on `data/eval_labels/`, mirroring the BERT pipeline's train/eval split.
+
+Embeddings are cached locally after the first run, so the OpenAI API is only called once per transcript.
+
+---
+
+## Prerequisites
+
+```bash
+pip install openai scikit-learn matplotlib numpy
+```
+
+### OpenAI API key
+
+Set the key in your shell:
+
+```bash
+export OPENAI_API_KEY=sk-...
+```
+
+To persist it across sessions, add the line to `~/.zshrc`:
+
+```bash
+echo 'export OPENAI_API_KEY=sk-...' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Get a key at platform.openai.com → API Keys → Create new secret key. The key is never written to any file in this repository.
+
+---
+
+## Overview
+
+```
+data/labels/      +  data/transcripts/
+      │
+      ▼
+  embed.py  ──► OpenAI API (first run only, then cached)
+      │               │
+      │               ▼
+      │       embeddings_cache/<stem>.npy
+      │
+      ├── build feature matrix (±2 neighbor window per utterance)
+      ├── train LogisticRegression on data/labels/
+      └── evaluate on data/eval_labels/ → evaluation_embed/
+```
+
+---
+
+## Step 1 — Label transcripts
+
+The embedding pipeline reads the same label files as the BERT pipeline. Follow the labeling instructions in [bert_pipeline.md](bert_pipeline.md) (Steps 1 through 1) to create `data/labels/<stem>.json` files. No additional labeling steps are needed.
+
+---
+
+## Step 2 — Run the pipeline
+
+```bash
+python embed.py
+```
+
+On the first run, this calls the OpenAI API to embed each utterance in every transcript that has a label file. Embeddings are cached under `embeddings_cache/` so subsequent runs skip the API entirely for already-embedded transcripts.
+
+Typical first-run output:
+
+```
+Found 24 transcripts. 24 training label file(s). 10 eval label file(s).
+Loaded 3282 training utterances across 24 transcripts.
+Loaded 841 eval utterances across 10 transcripts.
+
+Computing / loading embeddings for 34 transcript(s) …
+  Embedding 142 utterances for School01_Teacher01_... →
+  Cached → embeddings_cache/School01_Teacher01_....npy  (shape (142, 3072))
+  ...
+
+Training on 3282 utterances, evaluating on 841 utterances …
+
+=== Classification Report ===
+              precision    recall  f1-score   support
+           O       ...
+           I       ...
+```
+
+---
+
+## Output
+
+Results are written to `evaluation_embed/`:
+
+| File | Contents |
+|------|----------|
+| `classification_report.txt` | Per-class precision / recall / F1 for O and I |
+| `confusion_matrix.png` | 2×2 confusion matrix |
+| `per_conversation_f1.json` | Macro-F1 per eval transcript |
+
+---
+
+## How features are built
+
+Each utterance `n` is represented by concatenating the embeddings of utterances `[n-2, n-1, n, n+1, n+2]`. Positions outside the transcript boundary are zero-padded. This gives each utterance a feature vector of size `5 × 3072 = 15 360` that encodes local conversational context without any text truncation.
+
+---
+
+## Caching
+
+Each transcript's embeddings are stored as a float32 NumPy array in `embeddings_cache/<stem>.npy`. The cache directory is gitignored — embeddings are reproducible from the API and should not be committed. To force re-embedding a transcript (e.g., after the transcript file changes), delete its `.npy` file:
+
+```bash
+rm embeddings_cache/<stem>.npy
+```

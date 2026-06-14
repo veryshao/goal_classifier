@@ -118,7 +118,7 @@ def parse_transcript(filepath: str) -> List[TranscriptEvent]:
 
 
 if __name__ == "__main__":
-    # Quick test — run as: python parse_transcript.py data/conversations/session1.txt
+    # Quick test — run as: python parse_transcript.py data/transcripts/<file>.txt
     import sys
     if len(sys.argv) < 2:
         print("Usage: python parse_transcript.py <transcript_file>")

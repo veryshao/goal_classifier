@@ -31,14 +31,13 @@ def is_loo_fold(fold_name: str) -> bool:
     return os.path.exists(os.path.join("data/transcripts", f"{stem}.txt"))
 
 
-def has_BE_support(fold_name: str) -> bool:
-    """True if the held-out conversation has at least one B and one E label."""
+def has_I_support(fold_name: str) -> bool:
+    """True if the held-out conversation has at least one I label."""
     stem = fold_stem(fold_name)
     label_path = os.path.join("data/labels", f"{stem}.json")
     if not os.path.exists(label_path):
         return False
-    values = load_labels_from_json(label_path).values()
-    return "B" in values and "E" in values
+    return "I" in load_labels_from_json(label_path).values()
 
 
 rows = []
@@ -66,18 +65,18 @@ if not rows:
     raise SystemExit("No fold checkpoints found under results/ — run train.py first.")
 
 for name, f1, ckpt in rows:
-    flag = "" if has_BE_support(name) else "  (no B/E in held-out labels — excluded)"
+    flag = "" if has_I_support(name) else "  (no I labels in held-out fold — excluded)"
     print(f"{f1:.3f}  {name}  ({os.path.basename(ckpt)}){flag}")
 print(f"\nmean macro-F1 across {len(rows)} folds: "
       f"{sum(f1 for _, f1, _ in rows) / len(rows):.3f}")
 
-eligible = [row for row in rows if has_BE_support(row[0])]
+eligible = [row for row in rows if has_I_support(row[0])]
 if not eligible:
-    raise SystemExit("No fold's held-out conversation has nonzero B/E support — "
+    raise SystemExit("No fold's held-out conversation has any I labels — "
                      "can't pick a best model on that basis.")
 
 best_name, best_f1, best_ckpt = max(eligible, key=lambda r: r[1])
-print(f"\nBest fold with nonzero B/E support: {best_name}  macro-F1={best_f1:.3f}")
+print(f"\nBest fold with I-label support: {best_name}  macro-F1={best_f1:.3f}")
 print(f"Best checkpoint: {best_ckpt}")
 
 # Overwrite any existing best_model so consecutive runs always reflect the

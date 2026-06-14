@@ -132,19 +132,15 @@ def load_all_data(transcript_files: List[str],
 
 def load_labels_from_json(label_filepath: str) -> Dict[int, str]:
     """
-    Load your hand-annotated labels. Expected format:
-    {
-      "15": "B",
-      "16": "I",
-      "17": "I",
-      "34": "E"
-    }
-    Keys are event indices (as strings) from parse_transcript output.
-    All unlisted utterances are assumed "O".
+    Load hand-annotated labels.  Expected format: {"15": "I", "16": "I", ...}
+    Keys are utterance indices (strings) from print_indices.py output.
+    All unlisted utterances default to "O".
+    Legacy B/E values from the old 4-class scheme are silently mapped to "I".
     """
     with open(label_filepath) as f:
         raw = json.load(f)
-    return {int(k): v for k, v in raw.items()}
+    _collapse = {"B": "I", "E": "I"}
+    return {int(k): _collapse.get(v, v) for k, v in raw.items()}
 
 
 if __name__ == "__main__":

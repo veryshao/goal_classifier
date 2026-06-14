@@ -81,7 +81,7 @@ if __name__ == "__main__":
 
         train_label_ids = [ex["label_id"] for ex in train_ex]
         weights = compute_class_weight("balanced",
-                                        classes=np.array([0,1,2,3]),
+                                        classes=np.array([0, 1]),
                                         y=np.array(train_label_ids))
         class_weights = torch.tensor(weights, dtype=torch.float)
 
@@ -89,7 +89,7 @@ if __name__ == "__main__":
               f"Train: {len(train_ex)} | Val: {len(val_ex)} ===")
 
         model = AutoModelForSequenceClassification.from_pretrained(
-            MODEL_NAME, num_labels=4, id2label=ID2LABEL, label2id=LABEL2ID
+            MODEL_NAME, num_labels=2, id2label=ID2LABEL, label2id=LABEL2ID
         )
 
         args = TrainingArguments(
@@ -111,8 +111,8 @@ if __name__ == "__main__":
             preds = np.argmax(logits, axis=-1)
             f1    = f1_score(labels, preds, average="macro", zero_division=0)
             print(classification_report(labels, preds,
-                labels=[0,1,2,3],
-                target_names=["O","B","I","E"], zero_division=0))
+                labels=[0, 1],
+                target_names=["O", "I"], zero_division=0))
             return {"f1_macro": f1}
 
         trainer = WeightedTrainer(
