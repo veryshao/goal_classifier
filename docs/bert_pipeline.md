@@ -1,6 +1,6 @@
 # BERT Pipeline
 
-Fine-tunes `bert-base-uncased` for binary O/I classification of goal-setting discussions in tutoring transcripts.
+Fine-tunes `bert-base-uncased` for binary O/I classification of goal-setting discussions in tutoring transcripts. Trains on `data/labels/` and evaluates on `data/eval_labels/`, saving the best checkpoint (by macro-F1 on the eval set) to `results/best_model/`.
 
 ---
 
@@ -10,7 +10,7 @@ Fine-tunes `bert-base-uncased` for binary O/I classification of goal-setting dis
 pip install torch transformers scikit-learn matplotlib numpy
 ```
 
-GPU (CUDA or Apple MPS) is recommended for training. Inference in `evaluate.py` and `predict.py` auto-selects the best available device.
+GPU (CUDA or Apple MPS) is strongly recommended for training. Inference in `evaluate.py` and `predict.py` auto-selects the best available device.
 
 ---
 
@@ -20,12 +20,10 @@ GPU (CUDA or Apple MPS) is recommended for training. Inference in `evaluate.py` 
 label transcripts
        │
        ▼
-  python train.py          ← LOO fine-tuning; one checkpoint per fold
+  python train.py      ← trains on data/labels/, evaluates on data/eval_labels/,
+       │                  saves best checkpoint → results/best_model/
        │
-       ▼
-  python find_best_model.py ← picks best fold → results/best_model/
-       │
-       ├──► python evaluate.py   ← eval on data/eval_labels/ → evaluation/
+       ├──► python evaluate.py   ← full eval report on data/eval_labels/ → evaluation/
        │
        └──► python predict.py    ← label new transcripts → data/labels/
                   │
@@ -66,41 +64,26 @@ python prepare_data.py
 
 ---
 
-## Step 2 — Train (leave-one-out cross-validation)
+## Step 2 — Train
 
 ```bash
 python train.py
 ```
 
-Holds out one transcript at a time, trains on the rest, evaluates on the held-out session, and saves a checkpoint under `results/<transcript_stem>/`. Class weights are recomputed per fold from the training split only — the held-out session's label distribution never leaks into its own fold's loss.
+Trains `bert-base-uncased` on all transcripts in `data/labels/`, evaluating on `data/eval_labels/` after each epoch. At the end it saves the epoch with the highest eval macro-F1 to `results/best_model/` automatically — no manual checkpoint selection needed.
 
-Training prints a per-fold O/I classification report at each epoch.
+Training prints an O/I classification report after every eval epoch.
 
----
-
-## Step 3 — Pick the best model
+To keep training running while your laptop is closed (on a remote machine):
 
 ```bash
-python find_best_model.py
-```
-
-Reads `trainer_state.json` from every fold checkpoint, filters to folds whose held-out session has at least one `I` label, picks the fold with the highest macro-F1, and copies that checkpoint to `results/best_model/`. Always run this after `train.py` and before `evaluate.py` or `predict.py`.
-
-Output looks like:
-
-```
-0.812  School01_Teacher01_...txt  (checkpoint-45)
-0.743  School01_Teacher07_...txt  (checkpoint-40)  (no I labels in held-out fold — excluded)
-...
-mean macro-F1 across N folds: 0.789
-
-Best fold with I-label support: School01_Teacher01_...txt  macro-F1=0.812
-Copied results/School01_.../checkpoint-45 -> results/best_model
+nohup python train.py > results/train_log.txt 2>&1 &
+tail -f results/train_log.txt   # check progress
 ```
 
 ---
 
-## Step 4 — Evaluate
+## Step 3 — Evaluate
 
 ```bash
 python evaluate.py
@@ -117,7 +100,7 @@ Runs batched inference over all transcripts in `data/eval_labels/` using the mod
 
 ---
 
-## Step 5 — Predict on new transcripts (bootstrap labeling)
+## Step 4 — Predict on new transcripts (bootstrap labeling)
 
 ```bash
 # Review each predicted I utterance interactively
@@ -130,19 +113,16 @@ python predict.py --auto --label_dir data/predicted_labels_new
 python predict.py --file data/transcripts/<file>.txt --label_dir data/predicted_labels_new
 ```
 
-Interactive mode (`default`) prints each predicted `I` utterance with its context window and confidence scores. Accept with Enter or type `I`/`O` to override.
-
-Confirmed labels are saved to `--label_dir` in the same sparse JSON format as `data/labels/`. Move confirmed files into `data/labels/` and retrain to grow the labeled set.
+Interactive mode prints each predicted `I` utterance with its context window and confidence scores. Accept with Enter or type `I`/`O` to override. Confirmed labels are saved to `--label_dir` in the same sparse JSON format as `data/labels/`.
 
 ---
 
 ## Retraining loop
 
 ```
-train.py → find_best_model.py → predict.py (on unlabeled sessions)
-       ↑                                         │
-       └─────── move confirmed labels ───────────┘
-                into data/labels/
+train.py → predict.py (on unlabeled sessions)
+    ↑               │
+    └── move confirmed labels into data/labels/ ──┘
 ```
 
-Each iteration adds more labeled transcripts, improving the model's precision on the most common error types visible in `error_analysis.json`.
+Each iteration adds more labeled transcripts. `error_analysis.json` from `evaluate.py` shows which error types are most common and where to focus labeling effort.

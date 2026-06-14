@@ -6,8 +6,10 @@ Two independent approaches share the same labeled data:
 
 | Pipeline | File | Approach |
 |----------|------|----------|
-| **BERT** | `train.py` → `find_best_model.py` → `evaluate.py` | `bert-base-uncased` fine-tuned with LOO cross-validation |
+| **BERT** | `train.py` → `evaluate.py` | `bert-base-uncased` fine-tuned for 2-class classification |
 | **Embedding** | `embed.py` | OpenAI `text-embedding-3-large` + logistic regression |
+
+Both pipelines train on `data/labels/` and evaluate on `data/eval_labels/`.
 
 > **Data privacy:** All transcript and label files are excluded from version control (see `.gitignore`). Store data externally on an encrypted drive or institutional data system — never commit it to this repository.
 
@@ -26,7 +28,7 @@ goal_classifier/
 │   ├── predicted_labels*/       # Output folders from predict.py runs
 │   └── README.md
 │
-├── results/                     # NOT in git — BERT fold checkpoints
+├── results/                     # NOT in git — BERT checkpoints and best_model/
 ├── evaluation/                  # NOT in git — BERT evaluation outputs
 ├── evaluation_embed/            # NOT in git — embedding pipeline evaluation outputs
 ├── embeddings_cache/            # NOT in git — cached OpenAI embeddings (.npy)
@@ -39,8 +41,7 @@ goal_classifier/
 ├── prepare_data.py              # Windowed example builder + data loader
 │
 ├── ── BERT pipeline ─────────────────────────────────────────────────────────
-├── train.py                     # Leave-one-out fine-tuning of bert-base-uncased
-├── find_best_model.py           # Pick best LOO fold → results/best_model/
+├── train.py                     # Fine-tune bert-base-uncased → results/best_model/
 ├── evaluate.py                  # Evaluate BERT model on eval_labels/
 ├── predict.py                   # BERT inference + interactive bootstrap labeling
 │
@@ -94,10 +95,10 @@ See [data/README.md](data/README.md) for the full label format.
 Full walkthrough: [docs/bert_pipeline.md](docs/bert_pipeline.md)
 
 ```bash
-python train.py               # LOO fine-tuning; checkpoints → results/
-python find_best_model.py     # pick best fold → results/best_model/
-python evaluate.py            # evaluate on eval_labels/ → evaluation/
-python predict.py             # label new transcripts interactively
+python train.py       # train on data/labels/, evaluate on data/eval_labels/
+                      # saves best checkpoint → results/best_model/
+python evaluate.py    # full eval report → evaluation/
+python predict.py     # label new transcripts interactively
 ```
 
 ---
@@ -107,7 +108,7 @@ python predict.py             # label new transcripts interactively
 Full walkthrough: [docs/embed_pipeline.md](docs/embed_pipeline.md)
 
 ```bash
-python embed.py               # embed, train, evaluate → evaluation_embed/
+python embed.py       # embed, train, evaluate → evaluation_embed/
 ```
 
 Embeddings are cached after the first run — the OpenAI API is only called once per transcript.

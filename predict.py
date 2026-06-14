@@ -108,7 +108,7 @@ def review_predictions(results: list[dict],
 
         # Prompt for confirmation
         print(f"\n  Accept prediction '{r['pred']}'?")
-        print(f"  Enter label [B / I / E / O] or press Enter to accept '{r['pred']}': ",
+        print(f"  Enter label [I / O] or press Enter to accept '{r['pred']}': ",
               end="")
         user_input = input().strip().upper()
 

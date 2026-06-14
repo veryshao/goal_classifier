@@ -68,7 +68,7 @@ with open(f"{OUTPUT_DIR}/classification_report.txt", "w") as f:
 
 # ── 2. Confusion matrix ───────────────────────────────────────────────────────
 cm = confusion_matrix(all_labels, all_preds, labels=[0, 1])
-fig, ax = plt.subplots(figsize=(5, 4))
+_, ax = plt.subplots(figsize=(5, 4))
 disp = ConfusionMatrixDisplay(cm, display_labels=["O", "I"])
 disp.plot(ax=ax, colorbar=False, cmap="Blues")
 ax.set_title("Confusion Matrix")
@@ -117,8 +117,6 @@ with open(f"{OUTPUT_DIR}/error_analysis.json", "w") as f:
 print(f"\nFull error details saved to {OUTPUT_DIR}/error_analysis.json")
 
 # ── 4. Per-conversation performance ───────────────────────────────────────────
-# With LOO you care a lot about which conversations are harder than others
-
 print("\n=== Per-Conversation F1 (macro) ===")
 per_conv = defaultdict(lambda: {"labels": [], "preds": []})
 

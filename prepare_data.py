@@ -98,7 +98,7 @@ def load_all_data(transcript_files: List[str],
                   label_files: List[str]) -> List[Dict[str, Any]]:
     """
     Match each transcript to its label file by filename stem (a transcript's
-    .md.txt pairs with a same-stemmed .md.json label file) rather than by
+    .txt pairs with a same-stemmed .json label file) rather than by
     list position — transcript_files and label_files commonly differ in
     length and sort order, so zipping them positionally pairs the wrong
     sessions together. Transcripts without a label file are skipped.
@@ -145,7 +145,6 @@ def load_labels_from_json(label_filepath: str) -> Dict[int, str]:
 
 if __name__ == "__main__":
     import glob
-    from label_schema import LABEL2ID
 
     transcript_files = sorted(glob.glob("data/transcripts/*.txt"))
     label_files      = sorted(glob.glob("data/labels/*.json"))

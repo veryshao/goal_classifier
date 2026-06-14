@@ -1,5 +1,5 @@
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 @dataclass
@@ -31,8 +31,6 @@ APP_EVENT_RE = re.compile(
     r'page_scroll|drawing|view_change|inactivity|system|mouse move|'
     r'keyboard delete|mouse hover) event[^\]]*\]\s*([^\[]*)'
 )
-
-HEADER_RE = re.compile(r'^\(school=')
 
 def parse_transcript(filepath: str) -> List[TranscriptEvent]:
     """
