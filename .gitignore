@@ -6,9 +6,17 @@ __pycache__/
 # macOS
 .DS_Store
 
-# Model weights and optimizer states — large binary files unsuitable for git.
-# Store model artifacts in external storage (HuggingFace Hub, Google Drive, etc.)
-# Keeps small metadata (trainer_state.json, config.json, training_args.bin).
+# Model weights and optimizer states
 *.safetensors
 optimizer.pt
 rng_state.pth
+
+# Study data — NEVER commit participant transcripts, labels, or derived outputs.
+# Store externally (e.g. a shared encrypted drive or institutional data system).
+data/
+results/
+evaluation/
+evaluation_with_pred/
+
+# Cached embeddings (large, reproducible from the OpenAI API)
+embeddings_cache/
