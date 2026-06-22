@@ -16,7 +16,10 @@ rng_state.pth
 data/
 results/
 evaluation/
+evaluation_old/
 evaluation_embed/
+evaluation_bert_embed/
 
-# Cached embeddings (large, reproducible from the OpenAI API)
+# Cached embeddings (large, reproducible from the API or local model)
 embeddings_cache/
+bert_embeddings_cache/
