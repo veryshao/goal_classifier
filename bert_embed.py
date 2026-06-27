@@ -14,6 +14,7 @@ and lets BERT attend across utterance boundaries end-to-end.
 
 Because BERT weights are frozen, the cache is stable across runs.
 """
+import argparse
 import glob
 import json
 import os
@@ -166,10 +167,10 @@ def train_and_evaluate(train_examples: list[dict],
     X_eval,  y_eval,  eval_srcs = examples_to_Xy(eval_examples,  transcript_to_feat)
 
     if len(X_train) == 0:
-        print("No training examples — check data/labels/.")
+        print("No training examples — check your --train-labels directory.")
         return
     if len(X_eval) == 0:
-        print("No evaluation examples — check data/eval_labels/.")
+        print("No evaluation examples — check your --eval-labels directory.")
         return
 
     print(f"\nTraining on {len(X_train)} utterances, "
@@ -226,14 +227,21 @@ def train_and_evaluate(train_examples: list[dict],
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="BERT embedding pipeline for O/I classification")
+    parser.add_argument("--train-labels", default="data/labels",
+                        help="Directory of training label JSON files (default: data/labels)")
+    parser.add_argument("--eval-labels", default="data/eval_labels",
+                        help="Directory of eval label JSON files (default: data/eval_labels)")
+    cli_args = parser.parse_args()
+
     transcript_files = sorted(glob.glob("data/transcripts/*.txt"))
 
-    train_label_files = sorted(glob.glob("data/labels/*.json"))
-    eval_label_files  = sorted(glob.glob("data/eval_labels/*.json"))
+    train_label_files = sorted(glob.glob(f"{cli_args.train_labels}/*.json"))
+    eval_label_files  = sorted(glob.glob(f"{cli_args.eval_labels}/*.json"))
 
     print(f"Found {len(transcript_files)} transcripts.")
-    print(f"  Training labels:    {len(train_label_files)} file(s) in data/labels/")
-    print(f"  Evaluation labels:  {len(eval_label_files)} file(s) in data/eval_labels/\n")
+    print(f"  Training labels:    {len(train_label_files)} file(s) in {cli_args.train_labels}/")
+    print(f"  Evaluation labels:  {len(eval_label_files)} file(s) in {cli_args.eval_labels}/\n")
 
     train_examples = load_all_data(transcript_files, train_label_files)
     eval_examples  = load_all_data(transcript_files, eval_label_files)

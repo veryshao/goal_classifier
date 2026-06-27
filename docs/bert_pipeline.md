@@ -1,6 +1,6 @@
 # BERT Pipeline
 
-Fine-tunes `bert-base-uncased` for binary O/I classification of goal-setting discussions in tutoring transcripts. Trains on `data/labels/` and evaluates on `data/eval_labels/`, saving the best checkpoint (by macro-F1 on the eval set) to `results/best_model/`.
+Fine-tunes `bert-base-uncased` for binary O/I classification of goal-setting discussions in tutoring transcripts. By default trains on `data/labels/` and evaluates on `data/eval_labels/`; both directories are overridable via CLI flags. Saves the best checkpoint (by macro-F1 on the eval set) to `results/best_model/`.
 
 ---
 
@@ -20,10 +20,11 @@ GPU (CUDA or Apple MPS) is strongly recommended for training. Inference in `eval
 label transcripts
        │
        ▼
-  python train.py      ← trains on data/labels/, evaluates on data/eval_labels/,
+  python train.py      ← trains on --train-labels (default data/labels/),
+       │                  evaluates on --eval-labels (default data/eval_labels/),
        │                  saves best checkpoint → results/best_model/
        │
-       ├──► python evaluate.py   ← full eval report on data/eval_labels/ → evaluation/
+       ├──► python evaluate.py   ← eval report on --eval-labels → evaluation/
        │
        └──► python predict.py    ← label new transcripts → data/labels/
                   │
@@ -68,9 +69,11 @@ python prepare_data.py
 
 ```bash
 python train.py
+# or with alternate label directories:
+python train.py --train-labels data/binary_labels --eval-labels data/eval_binary_labels
 ```
 
-Trains `bert-base-uncased` on all transcripts in `data/labels/`, evaluating on `data/eval_labels/` after each epoch. At the end it saves the epoch with the highest eval macro-F1 to `results/best_model/` automatically — no manual checkpoint selection needed.
+Trains `bert-base-uncased` on all transcripts matched by the training labels directory (default `data/labels/`), evaluating on the eval labels directory (default `data/eval_labels/`) after each epoch. At the end it saves the epoch with the highest eval macro-F1 to `results/best_model/` automatically — no manual checkpoint selection needed.
 
 Training prints an O/I classification report after every eval epoch.
 
@@ -87,9 +90,11 @@ tail -f results/train_log.txt   # check progress
 
 ```bash
 python evaluate.py
+# or with an alternate eval labels directory:
+python evaluate.py --eval-labels data/eval_binary_labels
 ```
 
-Runs batched inference over all transcripts in `data/eval_labels/` using the model at `results/best_model/`. Writes to `evaluation/`:
+Runs batched inference over all transcripts matched by the eval labels directory (default `data/eval_labels/`) using the model at `results/best_model/`. Writes to `evaluation/`:
 
 | File | Contents |
 |------|----------|

@@ -1,6 +1,6 @@
 # BERT Embedding Pipeline
 
-Classifies goal-setting discussions using `bert-base-uncased` as a frozen feature extractor and a scikit-learn logistic regression classifier. Trains on `data/labels/` and evaluates on `data/eval_labels/`, mirroring the other two pipelines' train/eval split.
+Classifies goal-setting discussions using `bert-base-uncased` as a frozen feature extractor and a scikit-learn logistic regression classifier. By default trains on `data/labels/` and evaluates on `data/eval_labels/`; both directories are overridable via CLI flags. Mirrors the other two pipelines' train/eval split.
 
 BERT embeddings are cached locally after the first run, so the model only performs inference once per transcript.
 
@@ -36,7 +36,7 @@ GPU (CUDA or Apple MPS) speeds up the embedding pass but is not required — the
 ## Overview
 
 ```
-data/labels/  +  data/transcripts/
+--train-labels/  +  data/transcripts/
       │
       ▼
 bert_embed.py  ──► bert-base-uncased (first run only, then cached)
@@ -45,8 +45,8 @@ bert_embed.py  ──► bert-base-uncased (first run only, then cached)
       │         bert_embeddings_cache/<stem>.npy
       │
       ├── build feature matrix (±2 neighbor window per utterance)
-      ├── train LogisticRegression on data/labels/
-      └── evaluate on data/eval_labels/ → evaluation_bert_embed/
+      ├── train LogisticRegression on --train-labels (default data/labels/)
+      └── evaluate on --eval-labels (default data/eval_labels/) → evaluation_bert_embed/
 ```
 
 ---
@@ -61,6 +61,8 @@ This pipeline reads the same label files as the other two pipelines. Follow the 
 
 ```bash
 python bert_embed.py
+# or with alternate label directories:
+python bert_embed.py --train-labels data/binary_labels --eval-labels data/eval_binary_labels
 ```
 
 On the first run, `bert-base-uncased` embeds every utterance in every transcript that has a label file. Embeddings are cached under `bert_embeddings_cache/` so subsequent runs skip inference entirely for already-embedded transcripts.

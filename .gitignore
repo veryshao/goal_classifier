@@ -14,8 +14,8 @@ rng_state.pth
 # Study data — NEVER commit participant transcripts, labels, or derived outputs.
 # Store externally (e.g. a shared encrypted drive or institutional data system).
 data/
-results/
-evaluation/
+results*/
+evaluation*/
 evaluation_old/
 evaluation_embed/
 evaluation_bert_embed/

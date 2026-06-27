@@ -1,6 +1,6 @@
 # Embedding Pipeline
 
-Classifies goal-setting discussions using OpenAI `text-embedding-3-large` embeddings and a scikit-learn logistic regression classifier. Trains on `data/labels/` and evaluates on `data/eval_labels/`, mirroring the BERT pipeline's train/eval split.
+Classifies goal-setting discussions using OpenAI `text-embedding-3-large` embeddings and a scikit-learn logistic regression classifier. By default trains on `data/labels/` and evaluates on `data/eval_labels/`; both directories are overridable via CLI flags. Mirrors the BERT pipeline's train/eval split.
 
 Embeddings are cached locally after the first run, so the OpenAI API is only called once per transcript.
 
@@ -34,7 +34,7 @@ Get a key at platform.openai.com → API Keys → Create new secret key. The key
 ## Overview
 
 ```
-data/labels/      +  data/transcripts/
+--train-labels/   +  data/transcripts/
       │
       ▼
   embed.py  ──► OpenAI API (first run only, then cached)
@@ -43,8 +43,8 @@ data/labels/      +  data/transcripts/
       │       embeddings_cache/<stem>.npy
       │
       ├── build feature matrix (±2 neighbor window per utterance)
-      ├── train LogisticRegression on data/labels/
-      └── evaluate on data/eval_labels/ → evaluation_embed/
+      ├── train LogisticRegression on --train-labels (default data/labels/)
+      └── evaluate on --eval-labels (default data/eval_labels/) → evaluation_embed/
 ```
 
 ---
@@ -59,6 +59,8 @@ The embedding pipeline reads the same label files as the BERT pipeline. Follow t
 
 ```bash
 python embed.py
+# or with alternate label directories:
+python embed.py --train-labels data/binary_labels --eval-labels data/eval_binary_labels
 ```
 
 On the first run, this calls the OpenAI API to embed each utterance in every transcript that has a label file. Embeddings are cached under `embeddings_cache/` so subsequent runs skip the API entirely for already-embedded transcripts.

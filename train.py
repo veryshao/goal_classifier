@@ -1,3 +1,4 @@
+import argparse
 import glob
 import numpy as np
 from transformers import (AutoModelForSequenceClassification,
@@ -58,9 +59,16 @@ class WeightedTrainer(Trainer):
 # keeping the training code under __main__ prevents a full training run from
 # firing as a side effect of those imports.
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Fine-tune BERT for O/I classification")
+    parser.add_argument("--train-labels", default="data/labels",
+                        help="Directory of training label JSON files (default: data/labels)")
+    parser.add_argument("--eval-labels", default="data/eval_labels",
+                        help="Directory of eval label JSON files (default: data/eval_labels)")
+    args = parser.parse_args()
+
     transcript_files  = sorted(glob.glob("data/transcripts/*.txt"))
-    train_label_files = sorted(glob.glob("data/labels/*.json"))
-    eval_label_files  = sorted(glob.glob("data/eval_labels/*.json"))
+    train_label_files = sorted(glob.glob(f"{args.train_labels}/*.json"))
+    eval_label_files  = sorted(glob.glob(f"{args.eval_labels}/*.json"))
 
     train_examples = load_all_data(transcript_files, train_label_files)
     eval_examples  = load_all_data(transcript_files, eval_label_files)

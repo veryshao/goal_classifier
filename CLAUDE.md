@@ -22,15 +22,21 @@ collection run directly with `python <script>.py`. Dependencies: `torch`, `trans
 - Inspect how a transcript parses: `python parse_transcript.py data/transcripts/<file>.txt`
 - List utterances with their indices (needed for hand-labeling): `python print_indices.py data/transcripts/<file>.txt`
 - Inspect data loading / windowed examples end-to-end: `python prepare_data.py`
-- Train BERT: `python train.py` — fine-tunes `bert-base-uncased` on `data/labels/`, evaluates on
-  `data/eval_labels/` each epoch, and saves the best checkpoint to `./results/best_model/`.
-- Run BERT evaluation: `python evaluate.py` — expects a model at `./results/best_model`, writes
-  classification report, confusion matrix, error analysis, and per-conversation F1 to `./evaluation/`.
+- Train BERT: `python train.py [--train-labels DIR] [--eval-labels DIR]` — fine-tunes
+  `bert-base-uncased` on the training labels directory (default `data/labels/`), evaluates on the
+  eval labels directory (default `data/eval_labels/`) each epoch, and saves the best checkpoint to
+  `./results/best_model/`.
+- Run BERT evaluation: `python evaluate.py [--eval-labels DIR]` — expects a model at
+  `./results/best_model`, evaluates on the given label directory (default `data/eval_labels/`),
+  writes classification report, confusion matrix, error analysis, and per-conversation F1 to
+  `./evaluation/`.
 - Predict + bootstrap-label new sessions: `python predict.py [--file <path>] [--auto]` — runs the
   saved `./results/best_model` over transcripts, interactively reviews flagged `I` predictions
   (unless `--auto` is passed), and writes confirmed labels to `data/labels/`.
-- Run embedding pipeline: `python embed.py` — embeds utterances via OpenAI API (cached), trains
-  logistic regression on `data/labels/`, evaluates on `data/eval_labels/`, writes to `evaluation_embed/`.
+- Run embedding pipeline: `python embed.py [--train-labels DIR] [--eval-labels DIR]` — embeds
+  utterances via OpenAI API (cached), trains logistic regression on the training labels directory
+  (default `data/labels/`), evaluates on the eval labels directory (default `data/eval_labels/`),
+  writes to `evaluation_embed/`.
 
 There is no lint/test command. To exercise an individual piece, run the relevant module directly.
 
@@ -87,15 +93,16 @@ Data flows through these stages:
 9. **`train.py`** — fine-tunes `bert-base-uncased` (`AutoModelForSequenceClassification`, 2 labels)
    for the O/I task. Module-level: config constants, `tokenizer` (`MAX_LENGTH = 384`), `GoalDataset`,
    and `WeightedTrainer` (weighted cross-entropy using class weights computed from the training split).
-   The `__main__` block loads `data/labels/` as training data and `data/eval_labels/` as the eval
-   set, trains for `EPOCHS` epochs evaluating after each one, and saves the epoch with the highest
-   eval macro-F1 to `./results/best_model/` via `trainer.save_model()`. Keep all data loading and
-   training inside `if __name__ == "__main__":` — `evaluate.py` and `predict.py` both import
-   `MAX_LENGTH` from this module and must not trigger a training run as a side effect.
+   The `__main__` block accepts `--train-labels` and `--eval-labels` flags (defaulting to
+   `data/labels/` and `data/eval_labels/`), trains for `EPOCHS` epochs evaluating after each one,
+   and saves the epoch with the highest eval macro-F1 to `./results/best_model/` via
+   `trainer.save_model()`. Keep all data loading and training inside `if __name__ == "__main__":` —
+   `evaluate.py` and `predict.py` both import `MAX_LENGTH` from this module and must not trigger a
+   training run as a side effect.
 
-10. **`evaluate.py`** — loads all transcripts+labels via `load_all_data` (from `data/eval_labels/`),
-    runs batched inference (batch size 32, CUDA→MPS→CPU device placement) over the saved model from
-    `./results/best_model`, and writes to `./evaluation/`:
+10. **`evaluate.py`** — accepts an `--eval-labels` flag (default `data/eval_labels/`), loads all
+    transcripts+labels via `load_all_data`, runs batched inference (batch size 32, CUDA→MPS→CPU
+    device placement) over the saved model from `./results/best_model`, and writes to `./evaluation/`:
     - `classification_report.txt` (O/I precision/recall/F1)
     - `confusion_matrix.png`
     - `error_analysis.json` (misclassified examples grouped by `(true, pred)`)
@@ -112,15 +119,16 @@ Data flows through these stages:
     - Uses CUDA→MPS→CPU device placement; imports `MAX_LENGTH` from `train`.
 
 12. **`embed.py`** — OpenAI embedding pipeline + logistic regression classifier, mirroring the BERT
-    pipeline's train/eval split:
+    pipeline's train/eval split. Accepts `--train-labels` and `--eval-labels` flags (defaulting to
+    `data/labels/` and `data/eval_labels/`):
     - Embeds each utterance as `"<speaker>: <text>"` via `text-embedding-3-large`.
     - Caches per-transcript embeddings as `embeddings_cache/<stem>.npy` (float32, shape
       `(n_utterances, 3072)`). Cache files are gitignored and reproducible from the API.
     - Builds windowed feature vectors by concatenating embeddings for indices `[n-2, n-1, n, n+1,
       n+2]` with zero-padding at boundaries → feature dim = 15 360.
-    - Trains `LogisticRegression(class_weight="balanced")` on all `data/labels/` examples, then
-      evaluates on all `data/eval_labels/` examples. Writes classification report, confusion matrix,
-      and per-conversation F1 to `evaluation_embed/`.
+    - Trains `LogisticRegression(class_weight="balanced")` on the training labels, then evaluates on
+      the eval labels. Writes classification report, confusion matrix, and per-conversation F1 to
+      `evaluation_embed/`.
 
 ## Working in this codebase
 
@@ -139,7 +147,7 @@ Data flows through these stages:
 - `train.py`'s data loading and training loop live inside `if __name__ == "__main__":` — keep it
   that way. `evaluate.py` and `predict.py` both import `MAX_LENGTH` from `train`; any code at
   `train` import time would fire as a side effect.
-- `evaluate.py` and `predict.py` run their model-loading/inference logic at module level. That's
-  fine because nothing imports either of them — but guard that code before adding such an import.
+- `evaluate.py` and `predict.py` run their model-loading/inference logic inside
+  `if __name__ == "__main__":`. Nothing imports either of them, but this guard keeps them safe.
 - All data files (`data/`, `results/`, `evaluation/`, `evaluation_embed/`, `embeddings_cache/`) are
   gitignored. Never commit transcripts, labels, embeddings, or model weights.
