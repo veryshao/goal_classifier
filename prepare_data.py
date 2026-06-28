@@ -2,7 +2,7 @@ import json
 import os
 from typing import List, Dict, Any
 from parse_transcript import parse_transcript, TranscriptEvent
-from label_schema import LABEL2ID
+from label_schema import LABEL2ID, DEFAULT_LABEL, POSITIVE_LABEL
 
 # Concise tag used to summarize each non-utterance event type in [APP_CTX].
 # Covers every event_type produced by parse_transcript's EVENT_TYPE_MAP so
@@ -119,7 +119,7 @@ def load_all_data(transcript_files: List[str],
 
         # Index by utterance position only, matching print_indices.py
         utterance_events = [e for e in events if e.event_type == "utterance"]
-        full_labels = {i: labels.get(i, "O") for i in range(len(utterance_events))}
+        full_labels = {i: labels.get(i, DEFAULT_LABEL) for i in range(len(utterance_events))}
 
         examples = make_windowed_examples(events, full_labels)
 
@@ -139,7 +139,7 @@ def load_labels_from_json(label_filepath: str) -> Dict[int, str]:
     """
     with open(label_filepath) as f:
         raw = json.load(f)
-    _collapse = {"B": "I", "E": "I"}
+    _collapse = {"B": POSITIVE_LABEL, "E": POSITIVE_LABEL}
     return {int(k): _collapse.get(v, v) for k, v in raw.items()}
 
 
@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
     print("\nSample example:")
     for ex in all_examples:
-        if ex["label"] != "O":
+        if ex["label"] != DEFAULT_LABEL:
             print(f"  label:     {ex['label']}")
             print(f"  timestamp: {ex['timestamp']}")
             print(f"  text:      {ex['text'][:200]}")

@@ -7,6 +7,11 @@ LABEL2ID = {
 }
 ID2LABEL = {v: k for k, v in LABEL2ID.items()}
 
+DEFAULT_LABEL  = "O"
+POSITIVE_LABEL = "I"
+LABEL_NAMES    = [ID2LABEL[i] for i in range(len(ID2LABEL))]
+LABEL_IDS      = list(range(len(LABEL2ID)))
+
 # Labeling rules (for human annotators):
 # I: Any utterance that is part of a goal-setting discussion — includes the
 #    opening mention of goals, slider/skill-count discussion, and the closing

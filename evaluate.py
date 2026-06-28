@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 
 from prepare_data import load_all_data
-from label_schema import LABEL2ID, ID2LABEL
+from label_schema import LABEL2ID, ID2LABEL, LABEL_NAMES, LABEL_IDS
 from train import MAX_LENGTH
 
 # ── Config ───────────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     print("\n=== Classification Report ===")
     report = classification_report(
         all_labels, all_preds,
-        target_names=["O", "I"],
+        labels=LABEL_IDS, target_names=LABEL_NAMES,
         zero_division=0
     )
     print(report)
@@ -75,9 +75,9 @@ if __name__ == "__main__":
         f.write(report)
 
     # ── 2. Confusion matrix ──────────────────────────────────────────────────
-    cm = confusion_matrix(all_labels, all_preds, labels=[0, 1])
+    cm = confusion_matrix(all_labels, all_preds, labels=LABEL_IDS)
     _, ax = plt.subplots(figsize=(5, 4))
-    disp = ConfusionMatrixDisplay(cm, display_labels=["O", "I"])
+    disp = ConfusionMatrixDisplay(cm, display_labels=LABEL_NAMES)
     disp.plot(ax=ax, colorbar=False, cmap="Blues")
     ax.set_title("Confusion Matrix")
     plt.tight_layout()

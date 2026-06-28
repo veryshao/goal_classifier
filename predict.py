@@ -4,12 +4,12 @@ import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from prepare_data import make_windowed_examples
 from parse_transcript import parse_transcript
-from label_schema import LABEL2ID, ID2LABEL
+from label_schema import LABEL2ID, ID2LABEL, DEFAULT_LABEL, POSITIVE_LABEL, LABEL_NAMES
 from train import MAX_LENGTH
 
 # ── Config ────────────────────────────────────────────────────────────────────
 MODEL_DIR     = "./results/best_model"
-REVIEW_LABELS = {"I"}
+REVIEW_LABELS = {POSITIVE_LABEL}
 
 device    = torch.device("cuda" if torch.cuda.is_available()
                          else "mps"  if torch.backends.mps.is_available()
@@ -32,7 +32,7 @@ def predict_file(transcript_path: str) -> list[dict]:
     # Index by utterance position only (0-based among utterances), matching
     # print_indices.py and the keys used in label JSON files.
     utterance_events   = [e for e in events if e.event_type == "utterance"]
-    placeholder_labels = {i: "O" for i in range(len(utterance_events))}
+    placeholder_labels = {i: DEFAULT_LABEL for i in range(len(utterance_events))}
 
     examples = make_windowed_examples(events, placeholder_labels)
 
@@ -85,10 +85,10 @@ def review_predictions(results: list[dict],
     confirmed_labels = {}
 
     if not flagged:
-        print("  No I predictions — all utterances predicted O.")
+        print(f"  No {POSITIVE_LABEL} predictions — all utterances predicted {DEFAULT_LABEL}.")
         return confirmed_labels
 
-    print(f"\n  {len(flagged)} utterance(s) predicted as I. Review each:\n")
+    print(f"\n  {len(flagged)} utterance(s) predicted as {POSITIVE_LABEL}. Review each:\n")
 
     for r in flagged:
         target = get_target_utterance(r["text"])
@@ -108,7 +108,8 @@ def review_predictions(results: list[dict],
 
         # Prompt for confirmation
         print(f"\n  Accept prediction '{r['pred']}'?")
-        print(f"  Enter label [I / O] or press Enter to accept '{r['pred']}': ",
+        label_options = " / ".join(LABEL_NAMES)
+        print(f"  Enter label [{label_options}] or press Enter to accept '{r['pred']}': ",
               end="")
         user_input = input().strip().upper()
 
@@ -120,7 +121,7 @@ def review_predictions(results: list[dict],
             print(f"  Unrecognized input — defaulting to '{r['pred']}'")
             final_label = r["pred"]
 
-        if final_label != "O":
+        if final_label != DEFAULT_LABEL:
             confirmed_labels[str(r["utterance_idx"])] = final_label
 
         print()
@@ -142,7 +143,7 @@ def save_label_json(labels: dict, transcript_path: str, output_dir: str = "data/
     with open(out_path, "w") as f:
         json.dump(labels, f, indent=2)
 
-    print(f"  Saved: {out_path}  ({len(labels)} non-O label(s))")
+    print(f"  Saved: {out_path}  ({len(labels)} non-{DEFAULT_LABEL} label(s))")
     return out_path
 
 
@@ -207,7 +208,7 @@ if __name__ == "__main__":
             # Save all non-O predictions directly without review
             labels = {
                 str(r["utterance_idx"]): r["pred"]
-                for r in results if r["pred"] != "O"
+                for r in results if r["pred"] != DEFAULT_LABEL
             }
         else:
             labels = review_predictions(results, fpath)

@@ -74,9 +74,12 @@ Data flows through these stages:
    `print_indices.py` output. The output filename is hardcoded (`session1_labels.json`) — hand-edit
    it per session.
 
-7. **`label_schema.py`** — defines `LABEL2ID`/`ID2LABEL` for the 2-class O/I scheme (`O=0, I=1`),
-   annotation guidance for what counts as `I` vs `O`, and two heuristic signal lists:
-   `GOAL_APP_SIGNALS` and `GOAL_VERBAL_SIGNALS`.
+7. **`label_schema.py`** — single source of truth for the label scheme. Defines `LABEL2ID`/`ID2LABEL`
+   for the 2-class scheme (currently `O=0, I=1`), plus derived constants used by all other scripts:
+   `DEFAULT_LABEL` (the negative/unlisted class), `POSITIVE_LABEL` (the non-default class),
+   `LABEL_NAMES` (ordered by ID for reports), and `LABEL_IDS`. Also contains annotation guidance
+   for what counts as `I` vs `O`, and two heuristic signal lists: `GOAL_APP_SIGNALS` and
+   `GOAL_VERBAL_SIGNALS`.
 
 8. **`prepare_data.py`** — turns parsed events + sparse labels into model-ready examples:
    - `get_app_context_around` collects non-utterance events within ±30s and renders them as tags
@@ -132,10 +135,16 @@ Data flows through these stages:
 
 ## Working in this codebase
 
-- **Label scheme is O/I only** — `LABEL2ID = {"O": 0, "I": 1}`. All B/E annotations in the data
-  files were converted; `load_labels_from_json` maps any remaining legacy B/E → I defensively. Do
-  not reintroduce B/E without updating `label_schema.py`, `train.py`, `evaluate.py`, `predict.py`,
-  and `embed.py` consistently.
+- **Label scheme** — currently O/I (`LABEL2ID = {"O": 0, "I": 1}`). All label names, IDs, and
+  defaults are defined in `label_schema.py` and imported everywhere else — no other file hardcodes
+  label strings. To switch to a different binary scheme (e.g. G/U), edit only `label_schema.py`:
+  1. Change `LABEL2ID` (e.g. `{"U": 0, "G": 1}`).
+  2. Set `DEFAULT_LABEL` to the new negative class (e.g. `"U"`).
+  3. Set `POSITIVE_LABEL` to the new positive class (e.g. `"G"`).
+  4. `ID2LABEL`, `LABEL_NAMES`, and `LABEL_IDS` derive automatically.
+  5. Update the B/E legacy collapse target if those old annotations should map to the new positive
+     label — `load_labels_from_json` in `prepare_data.py` uses `POSITIVE_LABEL` for this.
+  6. Retrain from scratch (`python train.py`) — existing checkpoints are incompatible.
 - **Utterance index space** — indices are 0-based positions among utterances only, not among all
   events. `print_indices.py`, `make_windowed_examples`, `predict_file`, and `load_labels_from_json`
   all use this convention. Never index by position in the full `events` list.

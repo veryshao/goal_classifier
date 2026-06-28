@@ -9,7 +9,7 @@ from sklearn.utils.class_weight import compute_class_weight
 import torch
 
 from prepare_data import load_all_data
-from label_schema import LABEL2ID, ID2LABEL
+from label_schema import LABEL2ID, ID2LABEL, LABEL_NAMES, LABEL_IDS
 
 # ── Config ────────────────────────────────────────────────────────────────────
 MODEL_NAME = "bert-base-uncased"
@@ -114,7 +114,7 @@ if __name__ == "__main__":
         preds = np.argmax(logits, axis=-1)
         f1    = f1_score(labels, preds, average="macro", zero_division=0)
         print(classification_report(labels, preds,
-              labels=[0, 1], target_names=["O", "I"], zero_division=0))
+              labels=LABEL_IDS, target_names=LABEL_NAMES, zero_division=0))
         return {"f1_macro": f1}
 
     trainer = WeightedTrainer(

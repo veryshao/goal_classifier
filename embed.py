@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 
 from parse_transcript import parse_transcript
 from prepare_data import load_all_data
+from label_schema import LABEL_NAMES
 
 # ── Config ────────────────────────────────────────────────────────────────────
 EMBEDDING_MODEL = "text-embedding-3-large"
@@ -180,8 +181,8 @@ def train_and_evaluate(train_examples: list[dict],
     print("\n=== Classification Report ===")
     report = classification_report(
         y_eval, y_pred,
-        target_names=["O", "I"],
-        labels=["O", "I"],
+        target_names=LABEL_NAMES,
+        labels=LABEL_NAMES,
         zero_division=0,
     )
     print(report)
@@ -189,9 +190,9 @@ def train_and_evaluate(train_examples: list[dict],
         f.write(report)
 
     # ── 2. Confusion matrix ───────────────────────────────────────────────────
-    cm   = confusion_matrix(y_eval, y_pred, labels=["O", "I"])
+    cm   = confusion_matrix(y_eval, y_pred, labels=LABEL_NAMES)
     _, ax = plt.subplots(figsize=(4, 3))
-    ConfusionMatrixDisplay(cm, display_labels=["O", "I"]).plot(
+    ConfusionMatrixDisplay(cm, display_labels=LABEL_NAMES).plot(
         ax=ax, colorbar=False, cmap="Blues"
     )
     ax.set_title("Confusion Matrix (embed)")
