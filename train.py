@@ -95,7 +95,7 @@ if __name__ == "__main__":
         MODEL_NAME, num_labels=2, id2label=ID2LABEL, label2id=LABEL2ID
     )
 
-    args = TrainingArguments(
+    training_args = TrainingArguments(
         output_dir="./results/training",
         num_train_epochs=EPOCHS,
         per_device_train_batch_size=BATCH_SIZE,
@@ -119,7 +119,7 @@ if __name__ == "__main__":
 
     trainer = WeightedTrainer(
         model=model,
-        args=args,
+        args=training_args,
         train_dataset=GoalDataset(train_examples),
         eval_dataset=GoalDataset(eval_examples),
         compute_metrics=compute_metrics,

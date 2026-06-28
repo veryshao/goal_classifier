@@ -11,11 +11,10 @@ import json
 import os
 
 import joblib
-import numpy as np
 
 from parse_transcript import parse_transcript
 from bert_embed import get_or_cache_embeddings, build_windowed_features, MODEL_SAVE_DIR
-from label_schema import LABEL2ID, ID2LABEL, DEFAULT_LABEL, POSITIVE_LABEL, LABEL_NAMES
+from label_schema import LABEL2ID, DEFAULT_LABEL, POSITIVE_LABEL, LABEL_NAMES
 
 # ── Config ────────────────────────────────────────────────────────────────────
 MODEL_PATH    = os.path.join(MODEL_SAVE_DIR, "classifier.joblib")
