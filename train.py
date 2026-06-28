@@ -89,7 +89,7 @@ if __name__ == "__main__":
                                    classes=np.array([0, 1]),
                                    y=np.array(train_label_ids))
     class_weights = torch.tensor(weights, dtype=torch.float)
-    print(f"Class weights: O={weights[0]:.3f}  I={weights[1]:.3f}")
+    print(f"Class weights: {ID2LABEL[0]}={weights[0]:.3f}  {ID2LABEL[1]}={weights[1]:.3f}")
 
     model = AutoModelForSequenceClassification.from_pretrained(
         MODEL_NAME, num_labels=2, id2label=ID2LABEL, label2id=LABEL2ID

@@ -2,13 +2,13 @@
 # Applied at the UTTERANCE level only (non-utterance events provide context)
 
 LABEL2ID = {
-    "O": 0,   # Outside any goal-setting discussion
-    "I": 1,   # Inside a goal-setting discussion
+    "U": 0,   # Outside any goal-setting discussion
+    "R": 1,   # Inside a goal-setting discussion
 }
 ID2LABEL = {v: k for k, v in LABEL2ID.items()}
 
-DEFAULT_LABEL  = "O"
-POSITIVE_LABEL = "I"
+DEFAULT_LABEL  = "U"
+POSITIVE_LABEL = "R"
 LABEL_NAMES    = [ID2LABEL[i] for i in range(len(ID2LABEL))]
 LABEL_IDS      = list(range(len(LABEL2ID)))
 

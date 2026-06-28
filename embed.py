@@ -87,7 +87,7 @@ def get_or_cache_embeddings(transcript_path: str) -> np.ndarray:
     utterances = [e for e in events if e.event_type == "utterance"]
 
     if not utterances:
-        empty = np.zeros((0, 1), dtype=np.float32)
+        empty = np.zeros((0, 3072), dtype=np.float32)
         np.save(cache_path, empty)
         return empty
 
