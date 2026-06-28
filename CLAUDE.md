@@ -36,11 +36,22 @@ collection run directly with `python <script>.py`. Dependencies: `torch`, `trans
 - Run embedding pipeline: `python embed.py [--train-labels DIR] [--eval-labels DIR]` — embeds
   utterances via OpenAI API (cached), trains logistic regression on the training labels directory
   (default `data/labels/`), evaluates on the eval labels directory (default `data/eval_labels/`),
-  writes to `evaluation_embed/`.
+  saves classifier to `./results/embed_model/`, writes eval results to `evaluation_embed/`.
+- Predict with embedding pipeline: `python predict_embed.py [--file <path>] [--auto]` — runs the
+  saved `./results/embed_model/classifier.joblib` over transcripts, interactively reviews flagged
+  predictions (unless `--auto` is passed), and writes confirmed labels to `data/labels/`.
+- Run BERT embedding pipeline: `python bert_embed.py [--train-labels DIR] [--eval-labels DIR]` —
+  embeds utterances via frozen `bert-base-uncased` (cached), trains logistic regression, saves
+  classifier to `./results/bert_embed_model/`, writes eval results to `evaluation_bert_embed/`.
+- Predict with BERT embedding pipeline: `python predict_bert_embed.py [--file <path>] [--auto]` —
+  runs the saved `./results/bert_embed_model/classifier.joblib` over transcripts, interactively
+  reviews flagged predictions (unless `--auto` is passed), and writes confirmed labels to
+  `data/labels/`.
 
 There is no lint/test command. To exercise an individual piece, run the relevant module directly.
 
-Detailed pipeline walkthroughs live in `docs/`: `bert_pipeline.md` and `embed_pipeline.md`.
+Detailed pipeline walkthroughs live in `docs/`: `bert_pipeline.md`, `embed_pipeline.md`, and
+`bert_embed_pipeline.md`.
 
 ## Pipeline / architecture
 
@@ -129,9 +140,31 @@ Data flows through these stages:
       `(n_utterances, 3072)`). Cache files are gitignored and reproducible from the API.
     - Builds windowed feature vectors by concatenating embeddings for indices `[n-2, n-1, n, n+1,
       n+2]` with zero-padding at boundaries → feature dim = 15 360.
-    - Trains `LogisticRegression(class_weight="balanced")` on the training labels, then evaluates on
-      the eval labels. Writes classification report, confusion matrix, and per-conversation F1 to
+    - Trains `LogisticRegression(class_weight="balanced")` on the training labels, saves the
+      classifier to `results/embed_model/classifier.joblib`, then evaluates on the eval labels.
+      Writes classification report, confusion matrix, and per-conversation F1 to
       `evaluation_embed/`.
+
+13. **`predict_embed.py`** — inference + bootstrap-labeling tool for the OpenAI embedding pipeline:
+    - Loads the saved classifier from `results/embed_model/classifier.joblib`.
+    - `predict_file` embeds a transcript (cached), builds windowed features, and returns per-utterance
+      predictions with confidence and per-class probabilities.
+    - `review_predictions` is an interactive reviewer: prints each utterance predicted as the positive
+      class with its ±2 neighbor context and lets you accept or override from the keyboard.
+    - `save_label_json` writes confirmed labels to `data/labels/<transcript_stem>.json`.
+    - `get_unlabeled_files` finds transcripts without a matching label file.
+    - CLI: `--file <path>` for a single transcript, `--auto` to skip review.
+
+14. **`bert_embed.py`** — BERT embedding pipeline + logistic regression classifier. Uses frozen
+    `bert-base-uncased` as a feature extractor (mean-pooled last hidden state, 768-dim). Same
+    structure as `embed.py` but with no API key required. Caches to
+    `bert_embeddings_cache/<stem>.npy`. Saves the classifier to
+    `results/bert_embed_model/classifier.joblib`. Writes eval results to `evaluation_bert_embed/`.
+
+15. **`predict_bert_embed.py`** — inference + bootstrap-labeling tool for the BERT embedding
+    pipeline. Same interface as `predict_embed.py` but loads from
+    `results/bert_embed_model/classifier.joblib` and embeds via frozen `bert-base-uncased` instead
+    of the OpenAI API.
 
 ## Working in this codebase
 

@@ -20,6 +20,7 @@ import json
 import os
 from collections import defaultdict
 
+import joblib
 import numpy as np
 import torch
 from transformers import AutoModel, AutoTokenizer
@@ -34,9 +35,10 @@ from prepare_data import load_all_data
 from label_schema import LABEL_NAMES
 
 # ── Config ────────────────────────────────────────────────────────────────────
-MODEL_NAME = "bert-base-uncased"
-CACHE_DIR  = "bert_embeddings_cache"
-OUTPUT_DIR = "evaluation_bert_embed"
+MODEL_NAME     = "bert-base-uncased"
+CACHE_DIR      = "bert_embeddings_cache"
+OUTPUT_DIR     = "evaluation_bert_embed"
+MODEL_SAVE_DIR = "results/bert_embed_model"
 WINDOW     = 2       # ±2 neighbors → 5 embeddings concatenated per example
 BATCH_SIZE = 32      # utterances per forward pass
 MAX_LENGTH = 128     # tokens per utterance (no window text, so 128 suffices)
@@ -179,6 +181,12 @@ def train_and_evaluate(train_examples: list[dict],
 
     clf = LogisticRegression(max_iter=1000, class_weight="balanced", C=1.0)
     clf.fit(X_train, y_train)
+
+    os.makedirs(MODEL_SAVE_DIR, exist_ok=True)
+    save_path = os.path.join(MODEL_SAVE_DIR, "classifier.joblib")
+    joblib.dump(clf, save_path)
+    print(f"Saved classifier → {save_path}")
+
     y_pred = clf.predict(X_eval)
 
     # ── 1. Classification report ──────────────────────────────────────────────

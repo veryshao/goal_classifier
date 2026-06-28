@@ -19,6 +19,7 @@ evaluation*/
 evaluation_old/
 evaluation_embed/
 evaluation_bert_embed/
+OpenAI*/
 
 # Cached embeddings (large, reproducible from the API or local model)
 embeddings_cache/

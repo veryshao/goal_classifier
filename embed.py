@@ -20,6 +20,7 @@ import os
 import time
 from collections import defaultdict
 
+import joblib
 import numpy as np
 from openai import OpenAI
 from sklearn.linear_model import LogisticRegression
@@ -35,6 +36,7 @@ from label_schema import LABEL_NAMES
 EMBEDDING_MODEL = "text-embedding-3-large"
 CACHE_DIR       = "embeddings_cache"
 OUTPUT_DIR      = "evaluation_embed"
+MODEL_SAVE_DIR  = "results/embed_model"
 WINDOW          = 2      # ±2 neighbors → 5 embeddings concatenated per example
 EMBED_BATCH     = 100    # texts per API call (API max is 2048)
 MAX_RETRIES     = 3
@@ -175,6 +177,12 @@ def train_and_evaluate(train_examples: list[dict],
 
     clf = LogisticRegression(max_iter=1000, class_weight="balanced", C=1.0)
     clf.fit(X_train, y_train)
+
+    os.makedirs(MODEL_SAVE_DIR, exist_ok=True)
+    save_path = os.path.join(MODEL_SAVE_DIR, "classifier.joblib")
+    joblib.dump(clf, save_path)
+    print(f"Saved classifier → {save_path}")
+
     y_pred = clf.predict(X_eval)
 
     # ── 1. Classification report ──────────────────────────────────────────────

@@ -44,7 +44,13 @@ Get a key at platform.openai.com → API Keys → Create new secret key. The key
       │
       ├── build feature matrix (±2 neighbor window per utterance)
       ├── train LogisticRegression on --train-labels (default data/labels/)
+      ├── save classifier → results/embed_model/classifier.joblib
       └── evaluate on --eval-labels (default data/eval_labels/) → evaluation_embed/
+                                        │
+                                        ▼
+                              predict_embed.py  ← label new transcripts → data/labels/
+                                        │
+                                        └── retrain with more data (loop back to embed.py)
 ```
 
 ---
@@ -96,6 +102,39 @@ Results are written to `evaluation_embed/`:
 | `classification_report.txt` | Per-class precision / recall / F1 for O and I |
 | `confusion_matrix.png` | 2×2 confusion matrix |
 | `per_conversation_f1.json` | Macro-F1 per eval transcript |
+
+---
+
+## Step 3 — Predict on new transcripts (bootstrap labeling)
+
+Requires a trained classifier at `results/embed_model/classifier.joblib` (saved automatically by `embed.py` during Step 2).
+
+```bash
+# Review each predicted I utterance interactively
+python predict_embed.py --transcript_dir data/transcripts --label_dir data/labels
+
+# Skip review and save raw predictions
+python predict_embed.py --auto --label_dir data/labels
+
+# Single file
+python predict_embed.py --file data/transcripts/<file>.txt
+```
+
+Interactive mode prints each utterance predicted as the positive class with its ±2 neighbor context and confidence scores. Accept with Enter or type a label name to override. Confirmed labels are saved to `--label_dir` in the same sparse JSON format as `data/labels/`.
+
+If the transcript has not been embedded before, `predict_embed.py` calls the OpenAI API to embed it and caches the result under `embeddings_cache/` for future runs.
+
+---
+
+## Retraining loop
+
+```
+embed.py → predict_embed.py (on unlabeled sessions)
+    ↑               │
+    └── move confirmed labels into data/labels/ ──┘
+```
+
+Each iteration adds more labeled transcripts. Re-run `python embed.py` to retrain the classifier on the expanded label set. Already-cached embeddings are reused.
 
 ---
 

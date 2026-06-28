@@ -46,7 +46,13 @@ bert_embed.py  ──► bert-base-uncased (first run only, then cached)
       │
       ├── build feature matrix (±2 neighbor window per utterance)
       ├── train LogisticRegression on --train-labels (default data/labels/)
+      ├── save classifier → results/bert_embed_model/classifier.joblib
       └── evaluate on --eval-labels (default data/eval_labels/) → evaluation_bert_embed/
+                                        │
+                                        ▼
+                            predict_bert_embed.py  ← label new transcripts → data/labels/
+                                        │
+                                        └── retrain with more data (loop back to bert_embed.py)
 ```
 
 ---
@@ -102,6 +108,39 @@ Results are written to `evaluation_bert_embed/`:
 | `classification_report.txt` | Per-class precision / recall / F1 for O and I |
 | `confusion_matrix.png` | 2×2 confusion matrix |
 | `per_conversation_f1.json` | Macro-F1 per eval transcript |
+
+---
+
+## Step 3 — Predict on new transcripts (bootstrap labeling)
+
+Requires a trained classifier at `results/bert_embed_model/classifier.joblib` (saved automatically by `bert_embed.py` during Step 2).
+
+```bash
+# Review each predicted I utterance interactively
+python predict_bert_embed.py --transcript_dir data/transcripts --label_dir data/labels
+
+# Skip review and save raw predictions
+python predict_bert_embed.py --auto --label_dir data/labels
+
+# Single file
+python predict_bert_embed.py --file data/transcripts/<file>.txt
+```
+
+Interactive mode prints each utterance predicted as the positive class with its ±2 neighbor context and confidence scores. Accept with Enter or type a label name to override. Confirmed labels are saved to `--label_dir` in the same sparse JSON format as `data/labels/`.
+
+If the transcript has not been embedded before, `predict_bert_embed.py` runs BERT inference to embed it and caches the result under `bert_embeddings_cache/` for future runs. No API key is needed.
+
+---
+
+## Retraining loop
+
+```
+bert_embed.py → predict_bert_embed.py (on unlabeled sessions)
+    ↑                    │
+    └── move confirmed labels into data/labels/ ──┘
+```
+
+Each iteration adds more labeled transcripts. Re-run `python bert_embed.py` to retrain the classifier on the expanded label set. Already-cached embeddings are reused.
 
 ---
 
