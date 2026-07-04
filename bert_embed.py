@@ -39,7 +39,7 @@ MODEL_NAME     = "bert-base-uncased"
 CACHE_DIR      = "bert_embeddings_cache"
 OUTPUT_DIR     = "evaluation_bert_embed"
 MODEL_SAVE_DIR = "results/bert_embed_model"
-WINDOW     = 2       # ±2 neighbors → 5 embeddings concatenated per example
+WINDOW     = 10       # ±2 neighbors → 5 embeddings concatenated per example
 BATCH_SIZE = 32      # utterances per forward pass
 MAX_LENGTH = 128     # tokens per utterance (no window text, so 128 suffices)
 EMBED_DIM  = 768     # bert-base hidden size
@@ -85,6 +85,13 @@ def embed_texts(texts: list[str]) -> np.ndarray:
     return np.concatenate(all_vecs, axis=0)
 
 
+def get_utterance_seconds(transcript_path: str) -> np.ndarray:
+    """Return a float32 array of timestamps (seconds) for each utterance in the transcript."""
+    events = parse_transcript(transcript_path)
+    utterances = [e for e in events if e.event_type == "utterance"]
+    return np.array([u.seconds for u in utterances], dtype=np.float32)
+
+
 def get_or_cache_embeddings(transcript_path: str) -> np.ndarray:
     """
     Return cached BERT embeddings for a transcript, or compute and cache them.
@@ -117,15 +124,42 @@ def get_or_cache_embeddings(transcript_path: str) -> np.ndarray:
 # ── Feature construction ──────────────────────────────────────────────────────
 
 def build_windowed_features(embeddings: np.ndarray,
-                             window: int = WINDOW) -> np.ndarray:
+                             window: int = WINDOW,
+                             timestamps: np.ndarray = None,
+                             timestamp_window_seconds: int = None) -> np.ndarray:
     """
-    For each utterance i, concatenate embeddings[i-window … i+window].
-    Out-of-bounds positions are zero-padded.
-    Output shape: (n_utterances, (2*window+1) * EMBED_DIM).
+    Build per-utterance feature vectors from a (n_utterances, EMBED_DIM) embedding matrix.
+    Output shape is always (n_utterances, (2*window+1) * EMBED_DIM).
+
+    Default (timestamp_window_seconds=None): take the ±window nearest utterances by
+    position, zero-pad at transcript boundaries.
+
+    Timestamp mode (timestamps + timestamp_window_seconds provided): take up to window
+    utterances before and after the target that fall within timestamp_window_seconds
+    seconds, zero-pad any unfilled slots. Selection order matches positional mode —
+    the window-closest neighbors are used when more than window qualify.
     """
     n, dim   = embeddings.shape
     zero_row = np.zeros(dim, dtype=np.float32)
-    padded   = np.concatenate(
+
+    if timestamp_window_seconds is not None and timestamps is not None:
+        features = []
+        for i in range(n):
+            t = timestamps[i]
+            before_idx = [j for j in range(i)
+                          if abs(timestamps[j] - t) <= timestamp_window_seconds]
+            after_idx  = [j for j in range(i + 1, n)
+                          if abs(timestamps[j] - t) <= timestamp_window_seconds]
+            # Keep the `window` closest neighbors on each side
+            before_embs = [embeddings[j] for j in before_idx[-window:]]
+            after_embs  = [embeddings[j] for j in after_idx[:window]]
+            # Zero-pad to exactly `window` slots per side
+            before_pad = [zero_row] * (window - len(before_embs)) + before_embs
+            after_pad  = after_embs + [zero_row] * (window - len(after_embs))
+            features.append(np.concatenate(before_pad + [embeddings[i]] + after_pad))
+        return np.stack(features).astype(np.float32)
+
+    padded = np.concatenate(
         [np.tile(zero_row, (window, 1)), embeddings, np.tile(zero_row, (window, 1))],
         axis=0,
     )
@@ -136,8 +170,8 @@ def build_windowed_features(embeddings: np.ndarray,
 def examples_to_Xy(
     examples:             list[dict],
     transcript_to_feat:   dict[str, np.ndarray],
-) -> tuple[np.ndarray, np.ndarray, list[str]]:
-    rows_X, rows_y, rows_src = [], [], []
+) -> tuple[np.ndarray, np.ndarray, list[str], list[dict]]:
+    rows_X, rows_y, rows_src, rows_ex = [], [], [], []
     for ex in examples:
         feat = transcript_to_feat.get(ex["source_file"])
         if feat is None:
@@ -147,15 +181,17 @@ def examples_to_Xy(
             rows_X.append(feat[idx])
             rows_y.append(ex["label"])
             rows_src.append(ex["source_file"])
+            rows_ex.append(ex)
     if not rows_X:
-        return np.empty((0,)), np.empty((0,)), []
-    return np.stack(rows_X), np.array(rows_y), rows_src
+        return np.empty((0,)), np.empty((0,)), [], []
+    return np.stack(rows_X), np.array(rows_y), rows_src, rows_ex
 
 
 # ── Train and evaluate ────────────────────────────────────────────────────────
 
 def train_and_evaluate(train_examples: list[dict],
-                       eval_examples:  list[dict]) -> None:
+                       eval_examples:  list[dict],
+                       timestamp_window_seconds: int = None) -> None:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     all_sources = {ex["source_file"] for ex in train_examples + eval_examples}
@@ -164,10 +200,16 @@ def train_and_evaluate(train_examples: list[dict],
     transcript_to_feat: dict[str, np.ndarray] = {}
     for src in sorted(all_sources):
         embs = get_or_cache_embeddings(src)
-        transcript_to_feat[src] = build_windowed_features(embs)
+        if timestamp_window_seconds is not None:
+            ts = get_utterance_seconds(src)
+            transcript_to_feat[src] = build_windowed_features(
+                embs, timestamps=ts, timestamp_window_seconds=timestamp_window_seconds
+            )
+        else:
+            transcript_to_feat[src] = build_windowed_features(embs)
 
-    X_train, y_train, _         = examples_to_Xy(train_examples, transcript_to_feat)
-    X_eval,  y_eval,  eval_srcs = examples_to_Xy(eval_examples,  transcript_to_feat)
+    X_train, y_train, _, _               = examples_to_Xy(train_examples, transcript_to_feat)
+    X_eval,  y_eval,  eval_srcs, eval_exs = examples_to_Xy(eval_examples,  transcript_to_feat)
 
     if len(X_train) == 0:
         print("No training examples — check your --train-labels directory.")
@@ -230,6 +272,36 @@ def train_and_evaluate(train_examples: list[dict],
     with open(f"{OUTPUT_DIR}/per_conversation_f1.json", "w") as f:
         json.dump(conv_scores, f, indent=2)
 
+    # ── 4. Error analysis ─────────────────────────────────────────────────────
+    print("\n=== Error Analysis ===")
+    error_groups = defaultdict(list)
+    for ex, yt, yp in zip(eval_exs, y_eval.tolist(), y_pred.tolist()):
+        if yt != yp:
+            error_groups[(yt, yp)].append(ex)
+
+    error_summary = {}
+    for (true_lbl, pred_lbl), exs in sorted(error_groups.items()):
+        key_str = f"TRUE={true_lbl} → PRED={pred_lbl}"
+        print(f"\n{key_str}  ({len(exs)} errors)")
+        error_summary[key_str] = []
+        for ex in exs:
+            target_line = next(
+                (part for part in ex["text"].split("[SEP]") if "[TARGET]" in part),
+                ex["text"][:120]
+            )
+            print(f"  [{ex['timestamp']}] {target_line.strip()[:100]}")
+            print(f"    source: {ex['source_file']}")
+            error_summary[key_str].append({
+                "timestamp":   ex["timestamp"],
+                "source_file": ex["source_file"],
+                "target_text": target_line.strip(),
+                "full_input":  ex["text"],
+            })
+
+    with open(f"{OUTPUT_DIR}/error_analysis.json", "w") as f:
+        json.dump(error_summary, f, indent=2)
+    print(f"\nFull error details saved to {OUTPUT_DIR}/error_analysis.json")
+
     print(f"\nAll outputs written to ./{OUTPUT_DIR}/")
 
 
@@ -241,6 +313,9 @@ if __name__ == "__main__":
                         help="Directory of training label JSON files (default: data/labels)")
     parser.add_argument("--eval-labels", default="data/eval_labels",
                         help="Directory of eval label JSON files (default: data/eval_labels)")
+    parser.add_argument("--timestamp-window", type=int, default=None,
+                        help="Use timestamp-based context window of N seconds instead of "
+                             "the default ±2 utterance-count window.")
     cli_args = parser.parse_args()
 
     transcript_files = sorted(glob.glob("data/transcripts/*.txt"))
@@ -252,12 +327,15 @@ if __name__ == "__main__":
     print(f"  Training labels:    {len(train_label_files)} file(s) in {cli_args.train_labels}/")
     print(f"  Evaluation labels:  {len(eval_label_files)} file(s) in {cli_args.eval_labels}/\n")
 
-    train_examples = load_all_data(transcript_files, train_label_files)
-    eval_examples  = load_all_data(transcript_files, eval_label_files)
+    train_examples = load_all_data(transcript_files, train_label_files,
+                                   timestamp_window_seconds=cli_args.timestamp_window)
+    eval_examples  = load_all_data(transcript_files, eval_label_files,
+                                   timestamp_window_seconds=cli_args.timestamp_window)
 
     print(f"Loaded {len(train_examples)} training utterances across "
           f"{len({ex['source_file'] for ex in train_examples})} transcripts.")
     print(f"Loaded {len(eval_examples)} eval utterances across "
           f"{len({ex['source_file'] for ex in eval_examples})} transcripts.\n")
 
-    train_and_evaluate(train_examples, eval_examples)
+    train_and_evaluate(train_examples, eval_examples,
+                       timestamp_window_seconds=cli_args.timestamp_window)

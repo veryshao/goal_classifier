@@ -122,6 +122,33 @@ Interactive mode prints each predicted `I` utterance with its context window and
 
 ---
 
+## Configuring the context window
+
+The context window determines which surrounding utterances are concatenated (as `[SEP]`-separated text) around each `[TARGET]` utterance before BERT processes it. Two modes are available.
+
+### Utterance-count window (default)
+
+By default, the ±2 nearest utterances by position are included. To change the count, edit the `utterance_window` argument in the `make_windowed_examples` call inside `load_all_data` in `prepare_data.py`:
+
+```python
+# prepare_data.py — load_all_data
+examples = make_windowed_examples(events, full_labels, utterance_window=3)  # ±3 utterances
+```
+
+### Timestamp-based window
+
+Pass `--timestamp-window N` to use all utterances within N seconds of the target instead:
+
+```bash
+python train.py --timestamp-window 30
+```
+
+When `--timestamp-window` is set, the utterance-count window is ignored. Note that goal conversations tend to span 1–3 minutes, so a 30-second window typically captures 5–15 utterances depending on conversation pace.
+
+**Any window change requires retraining from scratch** — the input distribution changes and the existing checkpoint at `results/best_model/` becomes invalid.
+
+---
+
 ## Retraining loop
 
 ```

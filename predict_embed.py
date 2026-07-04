@@ -13,7 +13,8 @@ import os
 import joblib
 
 from parse_transcript import parse_transcript
-from embed import get_or_cache_embeddings, build_windowed_features, MODEL_SAVE_DIR
+from embed import (get_or_cache_embeddings, get_utterance_seconds,
+                   build_windowed_features, MODEL_SAVE_DIR)
 from label_schema import LABEL2ID, DEFAULT_LABEL, POSITIVE_LABEL, LABEL_NAMES
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -26,7 +27,8 @@ clf = joblib.load(MODEL_PATH)
 
 # ── Predict on a single file ────────────────────────────────────────────────
 
-def predict_file(transcript_path: str) -> list[dict]:
+def predict_file(transcript_path: str,
+                 timestamp_window_seconds: int = None) -> list[dict]:
     events     = parse_transcript(transcript_path)
     utterances = [e for e in events if e.event_type == "utterance"]
 
@@ -34,7 +36,12 @@ def predict_file(transcript_path: str) -> list[dict]:
         return []
 
     embeddings = get_or_cache_embeddings(transcript_path)
-    features   = build_windowed_features(embeddings)
+    if timestamp_window_seconds is not None:
+        ts       = get_utterance_seconds(transcript_path)
+        features = build_windowed_features(embeddings, timestamps=ts,
+                                           timestamp_window_seconds=timestamp_window_seconds)
+    else:
+        features = build_windowed_features(embeddings)
 
     probas = clf.predict_proba(features)
     preds  = clf.predict(features)
@@ -155,6 +162,11 @@ if __name__ == "__main__":
         "--auto", action="store_true",
         help="Skip interactive review and save raw predictions directly."
     )
+    parser.add_argument(
+        "--timestamp-window", type=int, default=None,
+        help="Use timestamp-based feature window of N seconds. Must match the value "
+             "used when training the classifier."
+    )
     args = parser.parse_args()
 
     if args.file:
@@ -166,7 +178,7 @@ if __name__ == "__main__":
     for i, fpath in enumerate(files):
         print(f"[{i+1}/{len(files)}] {fpath}")
 
-        results = predict_file(fpath)
+        results = predict_file(fpath, timestamp_window_seconds=args.timestamp_window)
         print(f"  {len(results)} utterances parsed.")
 
         if args.auto:

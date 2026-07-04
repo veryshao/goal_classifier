@@ -138,6 +138,50 @@ Each iteration adds more labeled transcripts. Re-run `python embed.py` to retrai
 
 ---
 
+## Configuring the context window
+
+This pipeline has two independent window settings.
+
+### Feature window — controls the classifier's input
+
+Two modes control which neighboring embeddings are combined into each utterance's feature vector.
+
+**Index-based window (default):** `WINDOW = 2` at the top of `embed.py` sets how many neighbors are concatenated. Feature dim = `(2 × WINDOW + 1) × 3072`. To change the count:
+
+```python
+# embed.py
+WINDOW = 3  # ±3 neighbors → 7 × 3072 = 21 504 dims
+```
+
+**Timestamp-based window:** Pass `--timestamp-window N` to select neighbors by time instead of position. Up to `WINDOW` utterances before and after the target that fall within N seconds are concatenated; any unfilled slots are zero-padded. Feature dim is the same `(2 × WINDOW + 1) × 3072` as the index-based mode.
+
+```bash
+python embed.py --timestamp-window 30
+```
+
+When `--timestamp-window` is set, positional order is replaced by temporal proximity, but the concatenated structure and feature dimension are preserved. Cached embeddings remain valid in either mode; retraining is required when switching.
+
+When predicting, pass the same flag to `predict_embed.py` to match the feature construction used during training:
+
+```bash
+python predict_embed.py --timestamp-window 30 --file data/transcripts/<file>.txt
+```
+
+### Text context window — controls what appears in error analysis
+
+The `[SEP]`/`[TARGET]` windowed text stored in each example is used for error analysis display only (not for classifier features). It is built by `make_windowed_examples` via `load_all_data` in `prepare_data.py`.
+
+**Utterance-count window (default ±2):**
+
+```python
+# prepare_data.py — load_all_data
+examples = make_windowed_examples(events, full_labels, utterance_window=3)
+```
+
+**Timestamp-based window:** same `--timestamp-window N` flag also switches the text context window alongside the feature window. Changing the text context window alone does not require retraining.
+
+---
+
 ## How features are built
 
 Each utterance `n` is represented by concatenating the embeddings of utterances `[n-2, n-1, n, n+1, n+2]`. Positions outside the transcript boundary are zero-padded. This gives each utterance a feature vector of size `5 × 3072 = 15 360` that encodes local conversational context without any text truncation.

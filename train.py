@@ -64,14 +64,19 @@ if __name__ == "__main__":
                         help="Directory of training label JSON files (default: data/labels)")
     parser.add_argument("--eval-labels", default="data/eval_labels",
                         help="Directory of eval label JSON files (default: data/eval_labels)")
+    parser.add_argument("--timestamp-window", type=int, default=None,
+                        help="Use timestamp-based context window of N seconds instead of "
+                             "the default ±2 utterance-count window.")
     args = parser.parse_args()
 
     transcript_files  = sorted(glob.glob("data/transcripts/*.txt"))
     train_label_files = sorted(glob.glob(f"{args.train_labels}/*.json"))
     eval_label_files  = sorted(glob.glob(f"{args.eval_labels}/*.json"))
 
-    train_examples = load_all_data(transcript_files, train_label_files)
-    eval_examples  = load_all_data(transcript_files, eval_label_files)
+    train_examples = load_all_data(transcript_files, train_label_files,
+                                   timestamp_window_seconds=args.timestamp_window)
+    eval_examples  = load_all_data(transcript_files, eval_label_files,
+                                   timestamp_window_seconds=args.timestamp_window)
 
     n_train_src = len({ex["source_file"] for ex in train_examples})
     n_eval_src  = len({ex["source_file"] for ex in eval_examples})

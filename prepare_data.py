@@ -46,11 +46,18 @@ def get_app_context_around(events: List[TranscriptEvent],
 def make_windowed_examples(events: List[TranscriptEvent],
                            labels: Dict[int, str],
                            utterance_window: int = 2,
-                           app_window_seconds: int = 30) -> List[Dict[str, Any]]:
+                           app_window_seconds: int = 30,
+                           timestamp_window_seconds: int = None) -> List[Dict[str, Any]]:
     """
     For each labeled utterance, build a text window.
     Utterances are indexed by their position among utterances only,
     matching the output of print_indices.py.
+
+    By default (timestamp_window_seconds=None) the context is the
+    ±utterance_window nearest utterances by position. If
+    timestamp_window_seconds is set, the context is instead all utterances
+    within that many seconds of the target utterance's timestamp; in that
+    case utterance_window is ignored for context selection.
     """
     utterance_events = [e for e in events if e.event_type == "utterance"]
 
@@ -60,8 +67,14 @@ def make_windowed_examples(events: List[TranscriptEvent],
         if utt_idx not in labels:
             continue
 
-        before = utterance_events[max(0, utt_idx - utterance_window):utt_idx]
-        after  = utterance_events[utt_idx + 1:utt_idx + 1 + utterance_window]
+        if timestamp_window_seconds is not None:
+            before = [e for e in utterance_events[:utt_idx]
+                      if abs(e.seconds - utt.seconds) <= timestamp_window_seconds]
+            after  = [e for e in utterance_events[utt_idx + 1:]
+                      if abs(e.seconds - utt.seconds) <= timestamp_window_seconds]
+        else:
+            before = utterance_events[max(0, utt_idx - utterance_window):utt_idx]
+            after  = utterance_events[utt_idx + 1:utt_idx + 1 + utterance_window]
 
         context_parts = []
         for e in before:
@@ -95,13 +108,17 @@ def make_windowed_examples(events: List[TranscriptEvent],
 
 
 def load_all_data(transcript_files: List[str],
-                  label_files: List[str]) -> List[Dict[str, Any]]:
+                  label_files: List[str],
+                  timestamp_window_seconds: int = None) -> List[Dict[str, Any]]:
     """
     Match each transcript to its label file by filename stem (a transcript's
     .txt pairs with a same-stemmed .json label file) rather than by
     list position — transcript_files and label_files commonly differ in
     length and sort order, so zipping them positionally pairs the wrong
     sessions together. Transcripts without a label file are skipped.
+
+    timestamp_window_seconds: if set, passed to make_windowed_examples to use
+    time-based context windowing instead of the default utterance-count window.
     """
     label_by_stem = {
         os.path.splitext(os.path.basename(f))[0]: f for f in label_files
@@ -121,7 +138,8 @@ def load_all_data(transcript_files: List[str],
         utterance_events = [e for e in events if e.event_type == "utterance"]
         full_labels = {i: labels.get(i, DEFAULT_LABEL) for i in range(len(utterance_events))}
 
-        examples = make_windowed_examples(events, full_labels)
+        examples = make_windowed_examples(events, full_labels,
+                                          timestamp_window_seconds=timestamp_window_seconds)
 
         for ex in examples:
             ex["source_file"] = transcript_fp
