@@ -39,7 +39,7 @@ MODEL_NAME     = "bert-base-uncased"
 CACHE_DIR      = "bert_embeddings_cache"
 OUTPUT_DIR     = "evaluation_bert_embed"
 MODEL_SAVE_DIR = "results/bert_embed_model"
-WINDOW     = 10       # ±2 neighbors → 5 embeddings concatenated per example
+WINDOW     = 2       # ±2 neighbors → 5 embeddings concatenated per example
 BATCH_SIZE = 32      # utterances per forward pass
 MAX_LENGTH = 128     # tokens per utterance (no window text, so 128 suffices)
 EMBED_DIM  = 768     # bert-base hidden size
@@ -191,8 +191,10 @@ def examples_to_Xy(
 
 def train_and_evaluate(train_examples: list[dict],
                        eval_examples:  list[dict],
-                       timestamp_window_seconds: int = None) -> None:
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+                       timestamp_window_seconds: int = None,
+                       window: int = WINDOW,
+                       output_dir: str = OUTPUT_DIR) -> None:
+    os.makedirs(output_dir, exist_ok=True)
 
     all_sources = {ex["source_file"] for ex in train_examples + eval_examples}
 
@@ -203,10 +205,11 @@ def train_and_evaluate(train_examples: list[dict],
         if timestamp_window_seconds is not None:
             ts = get_utterance_seconds(src)
             transcript_to_feat[src] = build_windowed_features(
-                embs, timestamps=ts, timestamp_window_seconds=timestamp_window_seconds
+                embs, window=window, timestamps=ts,
+                timestamp_window_seconds=timestamp_window_seconds
             )
         else:
-            transcript_to_feat[src] = build_windowed_features(embs)
+            transcript_to_feat[src] = build_windowed_features(embs, window=window)
 
     X_train, y_train, _, _               = examples_to_Xy(train_examples, transcript_to_feat)
     X_eval,  y_eval,  eval_srcs, eval_exs = examples_to_Xy(eval_examples,  transcript_to_feat)
@@ -240,7 +243,7 @@ def train_and_evaluate(train_examples: list[dict],
         zero_division=0,
     )
     print(report)
-    with open(f"{OUTPUT_DIR}/classification_report.txt", "w") as f:
+    with open(f"{output_dir}/classification_report.txt", "w") as f:
         f.write(report)
 
     # ── 2. Confusion matrix ───────────────────────────────────────────────────
@@ -251,9 +254,9 @@ def train_and_evaluate(train_examples: list[dict],
     )
     ax.set_title("Confusion Matrix (bert-embed)")
     plt.tight_layout()
-    plt.savefig(f"{OUTPUT_DIR}/confusion_matrix.png", dpi=150)
+    plt.savefig(f"{output_dir}/confusion_matrix.png", dpi=150)
     plt.close()
-    print(f"Confusion matrix saved to {OUTPUT_DIR}/confusion_matrix.png")
+    print(f"Confusion matrix saved to {output_dir}/confusion_matrix.png")
 
     # ── 3. Per-conversation F1 ────────────────────────────────────────────────
     print("\n=== Per-Conversation F1 (macro) ===")
@@ -269,7 +272,7 @@ def train_and_evaluate(train_examples: list[dict],
         conv_scores[conv] = round(f1, 3)
         print(f"  {os.path.basename(conv):50s}  macro-F1 = {f1:.3f}")
 
-    with open(f"{OUTPUT_DIR}/per_conversation_f1.json", "w") as f:
+    with open(f"{output_dir}/per_conversation_f1.json", "w") as f:
         json.dump(conv_scores, f, indent=2)
 
     # ── 4. Error analysis ─────────────────────────────────────────────────────
@@ -298,11 +301,11 @@ def train_and_evaluate(train_examples: list[dict],
                 "full_input":  ex["text"],
             })
 
-    with open(f"{OUTPUT_DIR}/error_analysis.json", "w") as f:
+    with open(f"{output_dir}/error_analysis.json", "w") as f:
         json.dump(error_summary, f, indent=2)
-    print(f"\nFull error details saved to {OUTPUT_DIR}/error_analysis.json")
+    print(f"\nFull error details saved to {output_dir}/error_analysis.json")
 
-    print(f"\nAll outputs written to ./{OUTPUT_DIR}/")
+    print(f"\nAll outputs written to ./{output_dir}/")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -315,7 +318,11 @@ if __name__ == "__main__":
                         help="Directory of eval label JSON files (default: data/eval_labels)")
     parser.add_argument("--timestamp-window", type=int, default=None,
                         help="Use timestamp-based context window of N seconds instead of "
-                             "the default ±2 utterance-count window.")
+                             "the default ±utterance-count window.")
+    parser.add_argument("--window", type=int, default=WINDOW,
+                        help=f"Neighbor slots on each side of the target (default: {WINDOW}).")
+    parser.add_argument("--output-dir", default=OUTPUT_DIR,
+                        help=f"Directory for eval outputs (default: {OUTPUT_DIR}).")
     cli_args = parser.parse_args()
 
     transcript_files = sorted(glob.glob("data/transcripts/*.txt"))
@@ -338,4 +345,6 @@ if __name__ == "__main__":
           f"{len({ex['source_file'] for ex in eval_examples})} transcripts.\n")
 
     train_and_evaluate(train_examples, eval_examples,
-                       timestamp_window_seconds=cli_args.timestamp_window)
+                       timestamp_window_seconds=cli_args.timestamp_window,
+                       window=cli_args.window,
+                       output_dir=cli_args.output_dir)

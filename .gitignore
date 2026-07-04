@@ -21,6 +21,9 @@ evaluation_embed/
 evaluation_bert_embed/
 OpenAI*/
 
+# Sweep outputs (eval results + per-run models)
+sweep_results*/
+
 # Cached embeddings (large, reproducible from the API or local model)
 embeddings_cache/
 bert_embeddings_cache/
