@@ -6,10 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A research project that classifies utterances in tutoring-session transcripts as either inside or
 outside a goal-setting discussion. It's a per-utterance binary sequence-tagging task. Two annotation
-schemes are in use across different label directories (O/I and U/R — see `label_schema.py`); the
-active scheme is set there. Three pipeline approaches:
+schemes are in use across different label directories (see `ANNOTATION_SCHEMES` in
+`label_schema.py`): **O/I** (Outside/Inside a goal discussion — `data/labels/`,
+`data/eval_labels/`) and **U/R** (Unrelated/Related to goal discussion — `data/binary_labels/`,
+`data/eval_binary_labels/`). The active scheme for the pipelines is set in `label_schema.py`
+(currently O/I). Three pipeline approaches:
 
-1. **BERT classifier** — `bert-base-uncased` fine-tuned for 2-class U/R sequence classification
+1. **BERT classifier** — `bert-base-uncased` fine-tuned for 2-class sequence classification
    (`transformers` + `torch`). Trains on `data/labels/`, evaluates on `data/eval_labels/`.
 2. **OpenAI embedding classifier** — OpenAI `text-embedding-3-large` embeddings with ±2 neighbor
    windowed features and a `LogisticRegression` classifier (`openai` + `scikit-learn`). Same
@@ -57,10 +60,20 @@ collection run directly with `python <script>.py`. Dependencies: `torch`, `trans
   same as `predict_embed.py` but for the BERT embedding classifier. Pass `--timestamp-window N` if
   the classifier was trained with that flag.
 
+- Descriptive statistics of goal conversations: `python goal_stats.py [--schemes OI UR]
+  [--label-dirs DIR ...] [--transcripts DIR] [--output-dir DIR]` — no model required; groups
+  contiguous positive-labeled utterances into segments and reports segment frequency/duration,
+  tutor-vs-student word counts and ratios (goal-only and whole-session), and normalized segment
+  positions. Processes both annotation schemes by default (label dirs come from
+  `ANNOTATION_SCHEMES`), writing tables, summaries, and histograms to
+  `evaluation_goal_stats/<scheme>/`. `--label-dirs` overrides the scheme's directories and
+  requires a single `--schemes` value.
+
 There is no lint/test command. To exercise an individual piece, run the relevant module directly.
 
-Detailed pipeline walkthroughs live in `docs/`: `bert_pipeline.md`, `embed_pipeline.md`, and
-`bert_embed_pipeline.md`.
+Detailed pipeline walkthroughs live in `docs/`: `bert_pipeline.md`, `embed_pipeline.md`,
+`bert_embed_pipeline.md`, and `goal_stats.md` (usage and interpretation of the statistics
+script).
 
 ## Pipeline / architecture
 
@@ -90,18 +103,22 @@ Data flows through these stages:
    by `load_labels_from_json`.
 
 5. **`data/eval_labels/*.json`** — same format as `data/labels/`, but held out for evaluation only.
-   Never used during training.
+   Never used during training. The U/R annotation set lives in parallel directories with the same
+   format and the same session stems: `data/binary_labels/` (training) and
+   `data/eval_binary_labels/` (eval), with `"R"` as the positive label.
 
 6. **`build_label_json.py`** — a one-off templated helper for creating label files from
    `print_indices.py` output. The output filename is hardcoded (`session1_labels.json`) — hand-edit
    it per session.
 
 7. **`label_schema.py`** — single source of truth for the label scheme. Defines `LABEL2ID`/`ID2LABEL`
-   for the 2-class scheme (currently `U=0, R=1`), plus derived constants used by all other scripts:
-   `DEFAULT_LABEL` (the negative/unlisted class, `"U"`), `POSITIVE_LABEL` (the non-default class,
-   `"R"`), `LABEL_NAMES` (ordered by ID for reports), and `LABEL_IDS`. Also contains annotation
-   guidance for what counts as `R` vs `U`, and two heuristic signal lists: `GOAL_APP_SIGNALS` and
-   `GOAL_VERBAL_SIGNALS`.
+   for the active 2-class scheme (currently `O=0, I=1`), plus derived constants used by all other
+   scripts: `DEFAULT_LABEL` (the negative/unlisted class, `"O"`), `POSITIVE_LABEL` (the non-default
+   class, `"I"`), `LABEL_NAMES` (ordered by ID for reports), and `LABEL_IDS`. Also defines
+   `ANNOTATION_SCHEMES`, a registry describing both annotation sets (positive/default labels and
+   label directories for O/I and U/R) used by scheme-agnostic tools like `goal_stats.py`. Also
+   contains annotation guidance for what counts as positive vs negative, and two heuristic signal
+   lists: `GOAL_APP_SIGNALS` and `GOAL_VERBAL_SIGNALS`.
 
 8. **`prepare_data.py`** — turns parsed events + sparse labels into model-ready examples:
    - `get_app_context_around` collects non-utterance events within ±30s and renders them as tags
@@ -191,15 +208,26 @@ Data flows through these stages:
     `results/bert_embed_model/classifier.joblib` and embeds via frozen `bert-base-uncased` instead
     of the OpenAI API.
 
+16. **`goal_stats.py`** — descriptive statistics of goal conversations from the hand labels; no
+    model involved. For each annotation scheme in `ANNOTATION_SCHEMES` (both by default), groups
+    strictly contiguous positive-labeled utterances into segments and writes `per_segment.csv`,
+    `per_session.csv`, `summary.json`, `summary.txt`, and two histograms (segment positions and
+    durations) to `evaluation_goal_stats/<scheme>/`. Key definitions (duration = lower bound from
+    utterance start times; session bounds from utterances only; `tutor_share` vs raw ratio) are in
+    the module docstring and `docs/goal_stats.md`.
+
 ## Working in this codebase
 
 - **Label scheme** — two annotation sets exist in this repo, each with its own label directories
-  and label JSON files. `label_schema.py` is the single source of truth and must match whichever
-  set you are working with:
-  - **O/I scheme** (`{"O": 0, "I": 1}`) — Outside / Inside goal discussion
-  - **U/R scheme** (`{"U": 0, "R": 1}`) — Unrelated / Related to goal discussion (currently active)
-  All label names, IDs, and defaults are defined in `label_schema.py` and imported everywhere else
-  — no other file hardcodes label strings. To switch schemes, edit only `label_schema.py`:
+  and label JSON files, both registered in `ANNOTATION_SCHEMES` in `label_schema.py`:
+  - **O/I scheme** (`{"O": 0, "I": 1}`) — Outside / Inside goal discussion; `data/labels/` and
+    `data/eval_labels/` (currently active)
+  - **U/R scheme** (`{"U": 0, "R": 1}`) — Unrelated / Related to goal discussion;
+    `data/binary_labels/` and `data/eval_binary_labels/`
+  `label_schema.py` is the single source of truth and its active-scheme constants must match
+  whichever set you are training on. All label names, IDs, and defaults are defined there and
+  imported everywhere else — no other file hardcodes label strings (`goal_stats.py` reads both
+  schemes via `ANNOTATION_SCHEMES`). To switch the active scheme, edit only `label_schema.py`:
   1. Change `LABEL2ID` (e.g. `{"O": 0, "I": 1}`).
   2. Set `DEFAULT_LABEL` to the new negative class (e.g. `"O"`).
   3. Set `POSITIVE_LABEL` to the new positive class (e.g. `"I"`).

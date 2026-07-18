@@ -38,31 +38,40 @@ DEFAULT_TIMESTAMP_WINDOWS = [0, 15, 30, 60]  # 0 = index-based
 def parse_results(output_dir: str) -> dict:
     """
     Read classification_report.txt from output_dir and return a dict with
-    positive_f1 and macro_f1. Returns None values if the file is missing.
+    positive_precision, positive_recall, positive_f1, and macro_f1.
+    Returns None values if the file is missing.
     """
     path = os.path.join(output_dir, "classification_report.txt")
     if not os.path.exists(path):
-        return {"positive_f1": None, "macro_f1": None}
+        return {"positive_precision": None, "positive_recall": None,
+                "positive_f1": None, "macro_f1": None}
 
     with open(path) as f:
         lines = f.readlines()
 
-    positive_f1 = None
-    macro_f1    = None
+    positive_precision = None
+    positive_recall    = None
+    positive_f1        = None
+    accuracy           = None
     for line in lines:
         parts = line.split()
         if parts and parts[0] == POSITIVE_LABEL and len(parts) >= 4:
             try:
-                positive_f1 = float(parts[3])
+                positive_precision = float(parts[1])
+                positive_recall    = float(parts[2])
+                positive_f1        = float(parts[3])
             except ValueError:
                 pass
-        if "macro avg" in line and len(parts) >= 5:
+        if parts and parts[0] == "accuracy" and len(parts) >= 2:
             try:
-                macro_f1 = float(parts[4])
+                accuracy = float(parts[1])
             except ValueError:
                 pass
 
-    return {"positive_f1": positive_f1, "macro_f1": macro_f1}
+    return {"positive_precision": positive_precision,
+            "positive_recall":    positive_recall,
+            "positive_f1":        positive_f1,
+            "accuracy":           accuracy}
 
 
 # ── Single run ────────────────────────────────────────────────────────────────
@@ -104,14 +113,19 @@ def sweep(pipeline: str, windows: list[int], timestamp_windows: list[int],
         ts_label  = "index" if ts == 0 else f"ts{ts}"
         run_dir   = os.path.join(base_dir, f"w{window}_{ts_label}")
         succeeded = run_one(pipeline, window, ts, run_dir, train_labels, eval_labels)
-        metrics   = parse_results(run_dir) if succeeded else {"positive_f1": None, "macro_f1": None}
+        metrics   = parse_results(run_dir) if succeeded else {
+            "positive_precision": None, "positive_recall": None,
+            "positive_f1": None, "accuracy": None,
+        }
         rows.append({
-            "pipeline":        pipeline,
-            "window":          window,
-            "timestamp_window": ts if ts > 0 else "index",
-            "positive_f1":     metrics["positive_f1"],
-            "macro_f1":        metrics["macro_f1"],
-            "output_dir":      run_dir,
+            "pipeline":           pipeline,
+            "window":             window,
+            "timestamp_window":   ts if ts > 0 else "index",
+            "positive_precision": metrics["positive_precision"],
+            "positive_recall":    metrics["positive_recall"],
+            "positive_f1":        metrics["positive_f1"],
+            "accuracy":           metrics["accuracy"],
+            "output_dir":         run_dir,
         })
 
     # ── Write summary CSV ─────────────────────────────────────────────────────
@@ -119,7 +133,8 @@ def sweep(pipeline: str, windows: list[int], timestamp_windows: list[int],
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(
             f, fieldnames=["pipeline", "window", "timestamp_window",
-                           "positive_f1", "macro_f1", "output_dir"]
+                           "positive_precision", "positive_recall",
+                           "positive_f1", "accuracy", "output_dir"]
         )
         writer.writeheader()
         writer.writerows(rows)
@@ -128,12 +143,13 @@ def sweep(pipeline: str, windows: list[int], timestamp_windows: list[int],
     print(f"\n{'═'*70}")
     print(f"  SWEEP SUMMARY  —  {pipeline}")
     print(f"{'═'*70}")
-    print(f"  {'window':>6}  {'ts_window':>10}  {'pos_F1':>7}  {'macro_F1':>9}")
-    print(f"  {'------':>6}  {'----------':>10}  {'-------':>7}  {'---------':>9}")
+    print(f"  {'window':>6}  {'ts_window':>10}  {'pos_P':>6}  {'pos_R':>6}  {'pos_F1':>7}  {'accuracy':>9}")
+    print(f"  {'------':>6}  {'----------':>10}  {'-----':>6}  {'-----':>6}  {'-------':>7}  {'--------':>9}")
     for r in sorted(rows, key=lambda x: -(x["positive_f1"] or -1)):
-        pos  = f"{r['positive_f1']:.3f}" if r["positive_f1"] is not None else "  —  "
-        mac  = f"{r['macro_f1']:.3f}"    if r["macro_f1"]    is not None else "  —  "
-        print(f"  {r['window']:>6}  {str(r['timestamp_window']):>10}  {pos:>7}  {mac:>9}")
+        fmt = lambda v: f"{v:.3f}" if v is not None else "  —  "
+        print(f"  {r['window']:>6}  {str(r['timestamp_window']):>10}  "
+              f"{fmt(r['positive_precision']):>6}  {fmt(r['positive_recall']):>6}  "
+              f"{fmt(r['positive_f1']):>7}  {fmt(r['accuracy']):>9}")
     print(f"\n  Summary CSV → {csv_path}")
 
 

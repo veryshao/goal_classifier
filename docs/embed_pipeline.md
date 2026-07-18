@@ -2,6 +2,8 @@
 
 Classifies goal-setting discussions using OpenAI `text-embedding-3-large` embeddings and a scikit-learn logistic regression classifier. By default trains on `data/labels/` and evaluates on `data/eval_labels/`; both directories are overridable via CLI flags. Mirrors the BERT pipeline's train/eval split.
 
+> **Annotation schemes:** two hand-annotation sets exist in this repo — **O/I** (Outside/Inside a goal discussion; `data/labels/`, `data/eval_labels/`) and **U/R** (Unrelated/Related to goal discussion; `data/binary_labels/`, `data/eval_binary_labels/`). This pipeline trains on whichever scheme is active in `label_schema.py`; point the label-directory flags at the matching directories. See `label_schema.py` and CLAUDE.md for how to switch schemes.
+
 Embeddings are cached locally after the first run, so the OpenAI API is only called once per transcript.
 
 ---

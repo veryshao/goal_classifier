@@ -106,12 +106,6 @@ def parse_transcript(filepath: str) -> List[TranscriptEvent]:
             raw        = m.group(0)
         ))
 
-    # ── Sort by timestamp ─────────────────────────────────────────────────────
-    # Note: transcripts may have out-of-order timestamps due to multiple
-    # student-tutor pairs being interleaved in one file. Sorting by seconds
-    # gives the best approximation of chronological order, but is not perfect.
-    events.sort(key=lambda e: e.seconds)
-
     return events
 
 

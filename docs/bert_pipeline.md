@@ -2,6 +2,8 @@
 
 Fine-tunes `bert-base-uncased` for binary O/I classification of goal-setting discussions in tutoring transcripts. By default trains on `data/labels/` and evaluates on `data/eval_labels/`; both directories are overridable via CLI flags. Saves the best checkpoint (by macro-F1 on the eval set) to `results/best_model/`.
 
+> **Annotation schemes:** two hand-annotation sets exist in this repo — **O/I** (Outside/Inside a goal discussion; `data/labels/`, `data/eval_labels/`) and **U/R** (Unrelated/Related to goal discussion; `data/binary_labels/`, `data/eval_binary_labels/`). This pipeline trains on whichever scheme is active in `label_schema.py`; point the label-directory flags at the matching directories. See `label_schema.py` and CLAUDE.md for how to switch schemes.
+
 ---
 
 ## Prerequisites
