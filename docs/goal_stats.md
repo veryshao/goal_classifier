@@ -107,6 +107,24 @@ with `n_segments = 0` and count toward frequency statistics.
   goal-only tutor share exceeds whole-session share, tutors dominate goal
   discussions more than the rest of the session (typical: goal-setting is
   tutor-led).
+- **No-goal sessions** — the block reports tutor-vs-student word counts pooled
+  over sessions whose label file has zero goal utterances, plus the
+  distribution of per-session tutor share within that subset. Comparing this
+  `tutor_share` against the whole-session average shows whether the balance
+  of talk differs between sessions that included goal-setting and those that
+  didn't. Printed as `(no sessions without goal talk)` if the entire corpus
+  subset has goal utterances.
+- **Non-goal utterances (all sessions)** — word counts pooled across every
+  utterance that falls outside a goal segment, regardless of whether the
+  session contains goal talk. Comparing this `tutor_share` against the
+  goal-only share shows how much more (or less) tutor-dominated goal talk is
+  relative to the rest of the corpus.
+- **Non-goal utterances within goal-containing sessions** — same calculation
+  restricted to sessions that have at least one goal segment. This isolates
+  the "non-goal portion" of sessions where goals were actually discussed,
+  enabling a within-session comparison: how does the tutor/student balance
+  during goal talk compare with the balance in the same sessions when the
+  conversation has moved on?
 - **OI vs. UR** — comparing the two schemes' outputs shows how much of an
   O/I goal *span* is actual goal talk (UR) versus surrounding transition
   utterances included in the span.

@@ -234,10 +234,33 @@ def aggregate_stats(sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
             "tutor_share":         share,
         }
 
+    no_goal = [s for s in sessions if s["n_segments"] == 0]
+    ng_tutor = sum(s["session_tutor_words"] for s in no_goal)
+    ng_student = sum(s["session_student_words"] for s in no_goal)
+    ng_ratio, ng_share = ratio_and_share(ng_tutor, ng_student)
+
+    # Non-goal utterances = session total minus goal-segment utterances.
+    # Computed for (a) all sessions and (b) only sessions that have goal talk.
+    def _non_goal_share(s: Dict[str, Any]) -> Optional[float]:
+        t = s["session_tutor_words"] - s["goal_tutor_words"]
+        st = s["session_student_words"] - s["goal_student_words"]
+        _, share = ratio_and_share(t, st)
+        return share
+
+    goal_sessions = [s for s in sessions if s["n_segments"] > 0]
+
+    ngu_all_tutor   = sum(s["session_tutor_words"]   - s["goal_tutor_words"]   for s in sessions)
+    ngu_all_student = sum(s["session_student_words"] - s["goal_student_words"] for s in sessions)
+    ngu_all_ratio, ngu_all_share = ratio_and_share(ngu_all_tutor, ngu_all_student)
+
+    ngu_gs_tutor   = sum(s["session_tutor_words"]   - s["goal_tutor_words"]   for s in goal_sessions)
+    ngu_gs_student = sum(s["session_student_words"] - s["goal_student_words"] for s in goal_sessions)
+    ngu_gs_ratio, ngu_gs_share = ratio_and_share(ngu_gs_tutor, ngu_gs_student)
+
     return {
         "n_sessions":              len(sessions),
         "n_sessions_with_goal":    sum(1 for s in sessions if s["n_segments"] > 0),
-        "n_sessions_without_goal": sum(1 for s in sessions if s["n_segments"] == 0),
+        "n_sessions_without_goal": len(no_goal),
         "n_segments_total":        len(all_segments),
         "segments_per_session":    summarize([s["n_segments"] for s in sessions]),
         "segment_duration_seconds":
@@ -253,6 +276,30 @@ def aggregate_stats(sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
         "goal_tutor_share":        summarize([s["goal_tutor_share"] for s in sessions]),
         "pooled_words_whole_session": pooled["session"],
         "pooled_words_goal_only":     pooled["goal"],
+        "pooled_words_no_goal_sessions": {
+            "tutor_words":         ng_tutor,
+            "student_words":       ng_student,
+            "tutor_student_ratio": ng_ratio,
+            "tutor_share":         ng_share,
+        },
+        "no_goal_session_tutor_share":
+            summarize([s["session_tutor_share"] for s in no_goal]),
+        "pooled_words_non_goal_utterances": {
+            "tutor_words":         ngu_all_tutor,
+            "student_words":       ngu_all_student,
+            "tutor_student_ratio": ngu_all_ratio,
+            "tutor_share":         ngu_all_share,
+        },
+        "non_goal_utterance_tutor_share":
+            summarize([_non_goal_share(s) for s in sessions]),
+        "pooled_words_non_goal_in_goal_sessions": {
+            "tutor_words":         ngu_gs_tutor,
+            "student_words":       ngu_gs_student,
+            "tutor_student_ratio": ngu_gs_ratio,
+            "tutor_share":         ngu_gs_share,
+        },
+        "non_goal_in_goal_session_tutor_share":
+            summarize([_non_goal_share(s) for s in goal_sessions]),
     }
 
 
@@ -324,6 +371,49 @@ def format_summary(agg: Dict[str, Any]) -> str:
           agg["session_tutor_share"], "{:.3f}")
     block("Per-session tutor share (goal only):",
           agg["goal_tutor_share"], "{:.3f}")
+    lines.append("")
+    lines.append("No-goal sessions (sessions with zero goal utterances)")
+    lines.append("-" * 55)
+    n_ng = agg["n_sessions_without_goal"]
+    if n_ng == 0:
+        lines.append("  (no sessions without goal talk)")
+    else:
+        p = agg["pooled_words_no_goal_sessions"]
+        ratio = f"{p['tutor_student_ratio']:.2f}" \
+            if p["tutor_student_ratio"] is not None else "n/a"
+        share = f"{p['tutor_share']:.3f}" if p["tutor_share"] is not None else "n/a"
+        lines.append(f"  n={n_ng}  tutor={p['tutor_words']} "
+                     f"student={p['student_words']} "
+                     f"tutor:student={ratio} tutor_share={share}")
+        block("  Per-session tutor share:",
+              agg["no_goal_session_tutor_share"], "{:.3f}")
+    lines.append("")
+    lines.append("Non-goal utterances (all sessions)")
+    lines.append("-" * 55)
+    p = agg["pooled_words_non_goal_utterances"]
+    ratio = f"{p['tutor_student_ratio']:.2f}" \
+        if p["tutor_student_ratio"] is not None else "n/a"
+    share = f"{p['tutor_share']:.3f}" if p["tutor_share"] is not None else "n/a"
+    lines.append(f"  tutor={p['tutor_words']} student={p['student_words']} "
+                 f"tutor:student={ratio} tutor_share={share}")
+    block("  Per-session tutor share:",
+          agg["non_goal_utterance_tutor_share"], "{:.3f}")
+    lines.append("")
+    lines.append("Non-goal utterances within goal-containing sessions")
+    lines.append("-" * 55)
+    n_gs = agg["n_sessions_with_goal"]
+    if n_gs == 0:
+        lines.append("  (no sessions with goal talk)")
+    else:
+        p = agg["pooled_words_non_goal_in_goal_sessions"]
+        ratio = f"{p['tutor_student_ratio']:.2f}" \
+            if p["tutor_student_ratio"] is not None else "n/a"
+        share = f"{p['tutor_share']:.3f}" if p["tutor_share"] is not None else "n/a"
+        lines.append(f"  n={n_gs}  tutor={p['tutor_words']} "
+                     f"student={p['student_words']} "
+                     f"tutor:student={ratio} tutor_share={share}")
+        block("  Per-session tutor share:",
+              agg["non_goal_in_goal_session_tutor_share"], "{:.3f}")
     return "\n".join(lines)
 
 
