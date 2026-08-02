@@ -103,6 +103,7 @@ Results are written to `evaluation_embed/`:
 |------|----------|
 | `classification_report.txt` | Per-class precision / recall / F1 for O and I |
 | `confusion_matrix.png` | 2×2 confusion matrix |
+| `error_analysis.json` | Misclassified examples grouped by (true, pred) |
 | `per_conversation_f1.json` | Macro-F1 per eval transcript |
 
 ---

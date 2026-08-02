@@ -1,3 +1,17 @@
+"""Builds windowed utterance examples from parsed transcripts and sparse label dicts.
+
+Core functions:
+  get_app_context_around — collects non-utterance events within ±30 seconds of a
+    target and formats them as [SCREEN:], [CLICK:], [DRAG:] etc. tags.
+  make_windowed_examples — builds one example per utterance: a [SEP]-joined context
+    window with the target wrapped in [TARGET]...[/TARGET] and an [APP_CTX] suffix.
+    Two windowing modes: utterance_window=N (±N neighbors by position) or
+    timestamp_window_seconds=N (all utterances within N seconds).
+  load_labels_from_json  — reads a sparse label JSON; maps legacy B/E values to
+    POSITIVE_LABEL.
+  load_all_data          — stem-matches transcript .txt files with label .json files,
+    skips unmatched pairs, and returns a list of example dicts.
+"""
 import json
 import os
 from typing import List, Dict, Any

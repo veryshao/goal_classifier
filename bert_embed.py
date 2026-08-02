@@ -59,6 +59,7 @@ bert      = AutoModel.from_pretrained(MODEL_NAME).to(device).eval()
 
 def _mean_pool(last_hidden_state: torch.Tensor,
                attention_mask:    torch.Tensor) -> torch.Tensor:
+    """Mean-pool the last hidden state over non-padding tokens."""
     mask = attention_mask.unsqueeze(-1).float()
     return (last_hidden_state * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
 
@@ -171,6 +172,7 @@ def examples_to_Xy(
     examples:             list[dict],
     transcript_to_feat:   dict[str, np.ndarray],
 ) -> tuple[np.ndarray, np.ndarray, list[str], list[dict]]:
+    """Convert a list of examples to (X, y, source_files, matched_examples) using pre-computed per-transcript feature matrices."""
     rows_X, rows_y, rows_src, rows_ex = [], [], [], []
     for ex in examples:
         feat = transcript_to_feat.get(ex["source_file"])
@@ -194,6 +196,7 @@ def train_and_evaluate(train_examples: list[dict],
                        timestamp_window_seconds: int = None,
                        window: int = WINDOW,
                        output_dir: str = OUTPUT_DIR) -> None:
+    """Train a LogisticRegression classifier on train_examples, evaluate on eval_examples, and write outputs to output_dir."""
     os.makedirs(output_dir, exist_ok=True)
 
     all_sources = {ex["source_file"] for ex in train_examples + eval_examples}

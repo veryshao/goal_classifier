@@ -1,3 +1,11 @@
+"""One-off helper for creating a label JSON file from print_indices.py output.
+
+Fill in the ANNOTATIONS list with (utterance_index, label) pairs from
+print_indices.py output, then run: python build_label_json.py
+
+Output filename is hardcoded to session1_labels.json — rename manually after
+running. For ongoing labeling, prefer predict.py's interactive review mode.
+"""
 # build_label_json.py
 # Fill in ANNOTATIONS below using indices from print_indices.py output,
 # then run the script. Only list utterances with the positive label —

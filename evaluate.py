@@ -1,3 +1,16 @@
+"""Evaluates the saved BERT model on the eval label set.
+
+Loads the model from results/best_model/, runs batched inference (batch=32) over
+all transcripts matched by the eval labels directory, and writes four files to
+evaluation/:
+  classification_report.txt  — per-class precision/recall/F1
+  confusion_matrix.png       — 2x2 confusion matrix
+  error_analysis.json        — misclassified examples grouped by (true, pred)
+  per_conversation_f1.json   — macro-F1 per source transcript
+
+Default eval directory: data/eval_labels/. Override with --eval-labels.
+Device selection: CUDA -> MPS -> CPU.
+"""
 import argparse
 import glob
 import json

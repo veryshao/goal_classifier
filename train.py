@@ -1,3 +1,14 @@
+"""Fine-tunes bert-base-uncased for binary goal-setting discussion classification.
+
+Defines GoalDataset (a PyTorch Dataset that tokenizes windowed utterance examples)
+and WeightedTrainer (a Trainer subclass that applies class-weighted cross-entropy
+to handle the O/I class imbalance). MAX_LENGTH and GoalDataset are imported by
+evaluate.py and predict.py, so all training logic lives under __main__ to prevent
+a training run from firing as a side effect of those imports.
+
+Trains for EPOCHS epochs with per-epoch eval, saves the best checkpoint by eval
+macro-F1 to results/best_model/.
+"""
 import argparse
 import glob
 import numpy as np
@@ -21,6 +32,7 @@ EPOCHS     = 5
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
 class GoalDataset(Dataset):
+    """PyTorch Dataset that tokenizes windowed utterance examples for BERT classification."""
     def __init__(self, examples):
         self.examples = examples
 
@@ -40,6 +52,7 @@ class GoalDataset(Dataset):
 
 # ── Weighted trainer (handles O/I class imbalance) ───────────────────────────
 class WeightedTrainer(Trainer):
+    """Trainer subclass that applies class-weighted cross-entropy to handle the O/I class imbalance."""
     def __init__(self, *args, class_weights=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.class_weights = class_weights

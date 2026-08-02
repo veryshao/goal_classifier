@@ -1,3 +1,12 @@
+"""Prints utterance indices for hand-labeling a transcript.
+
+Output format: [index] [timestamp] [speaker] text
+
+The index is the 0-based position among utterances only — the key to use when
+creating label JSON files (data/labels/ or data/binary_labels/).
+
+Usage: python print_indices.py data/transcripts/<file>.txt
+"""
 import sys
 from parse_transcript import parse_transcript
 

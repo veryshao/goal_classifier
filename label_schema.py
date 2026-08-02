@@ -1,3 +1,15 @@
+"""Single source of truth for the active annotation scheme.
+
+LABEL2ID, DEFAULT_LABEL, POSITIVE_LABEL, ID2LABEL, LABEL_NAMES, and LABEL_IDS
+define the active scheme (currently U/R) consumed by train.py, evaluate.py,
+predict.py, embed.py, bert_embed.py, and their prediction scripts.
+
+ANNOTATION_SCHEMES documents both annotation sets (O/I and U/R) for tools that
+process multiple schemes at once (goal_stats.py).
+
+To switch the active scheme, edit only LABEL2ID, DEFAULT_LABEL, and POSITIVE_LABEL
+here — all other files derive from these constants. See CLAUDE.md for steps.
+"""
 # Label schema for goal conversation detection
 # Applied at the UTTERANCE level only (non-utterance events provide context)
 #

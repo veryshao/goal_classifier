@@ -56,6 +56,7 @@ from label_schema import ANNOTATION_SCHEMES
 
 
 def word_count(text: str) -> int:
+    """Count whitespace-delimited tokens in text."""
     return len(text.split())
 
 
@@ -97,6 +98,7 @@ def speaker_word_counts(utterances: List[TranscriptEvent],
 
 def ratio_and_share(tutor: int,
                     student: int) -> Tuple[Optional[float], Optional[float]]:
+    """Return (tutor/student ratio, tutor share). ratio is None when student==0; share is None when both are 0."""
     ratio = tutor / student if student > 0 else None
     share = tutor / (tutor + student) if (tutor + student) > 0 else None
     return ratio, share
@@ -104,6 +106,7 @@ def ratio_and_share(tutor: int,
 
 def _norm_pos(t: float, session_start: int,
               session_duration: int) -> Optional[float]:
+    """Normalize timestamp t to [0, 1] within the session; None if duration <= 0."""
     if session_duration <= 0:
         return None
     return min(1.0, max(0.0, (t - session_start) / session_duration))
@@ -114,6 +117,7 @@ def segment_stats(utterances: List[TranscriptEvent],
                   end_idx: int,
                   session_start: int,
                   session_duration: int) -> Dict[str, Any]:
+    """Build a stats dict for goal segment [start_idx, end_idx] within utterances."""
     seg_utts = utterances[start_idx:end_idx + 1]
     seconds = [u.seconds for u in seg_utts]
     seg_min, seg_max = min(seconds), max(seconds)
@@ -140,6 +144,7 @@ def segment_stats(utterances: List[TranscriptEvent],
 
 def session_stats(transcript_fp: str, label_fp: str,
                   positive_label: str, default_label: str) -> Dict[str, Any]:
+    """Parse one session and return a dict of segment-level and whole-session statistics."""
     stem = os.path.splitext(os.path.basename(transcript_fp))[0]
     events = parse_transcript(transcript_fp)
     utterances = [e for e in events if e.event_type == "utterance"]
@@ -220,6 +225,7 @@ def summarize(values: List[Optional[float]]) -> Dict[str, float]:
 
 
 def aggregate_stats(sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Compute corpus-level aggregates from a list of session_stats dicts."""
     all_segments = [seg for s in sessions for seg in s["segments"]]
 
     pooled = {}
@@ -322,10 +328,12 @@ SESSION_CSV_COLUMNS = [
 
 
 def _round(v: Any) -> Any:
+    """Round floats to 4 decimal places; pass non-floats through unchanged."""
     return round(v, 4) if isinstance(v, float) else v
 
 
 def format_summary(agg: Dict[str, Any]) -> str:
+    """Format an aggregate_stats dict as a human-readable multi-line string."""
     lines = []
     lines.append("Goal conversation descriptive statistics")
     lines.append("=" * 55)
@@ -420,6 +428,7 @@ def format_summary(agg: Dict[str, Any]) -> str:
 def write_outputs(sessions: List[Dict[str, Any]],
                   agg: Dict[str, Any],
                   output_dir: str) -> None:
+    """Write per_segment.csv, per_session.csv, summary.json, summary.txt, and two histogram PNGs to output_dir."""
     os.makedirs(output_dir, exist_ok=True)
 
     with open(os.path.join(output_dir, "per_segment.csv"), "w", newline="") as f:
@@ -472,6 +481,7 @@ def run_scheme(scheme_name: str,
                label_dirs: List[str],
                transcripts_dir: str,
                output_dir: str) -> None:
+    """Process one annotation scheme end-to-end: collect labels, compute stats, write outputs."""
     scheme = ANNOTATION_SCHEMES[scheme_name]
     positive, default = scheme["positive_label"], scheme["default_label"]
 

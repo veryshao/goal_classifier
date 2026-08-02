@@ -1,9 +1,19 @@
+"""Parses PLUS tutoring-session transcripts into lists of TranscriptEvents.
+
+Handles both mm:ss and h:mm:ss timestamps, strips inline annotator comments
+(including those that use non-breaking spaces), and maps all recognized
+app/interaction event types to canonical event_type strings.
+
+The utterance index space produced here (0-based among utterances only, in parse
+order) matches print_indices.py output and the keys in label JSON files.
+"""
 import re
 from dataclasses import dataclass
 from typing import List, Optional
 
 @dataclass
 class TranscriptEvent:
+    """One parsed event from a transcript: an utterance or an app/interaction event."""
     timestamp: str
     seconds: int
     event_type: str
@@ -12,6 +22,7 @@ class TranscriptEvent:
     raw: str
 
 def timestamp_to_seconds(ts: str) -> int:
+    """Convert a mm:ss or h:mm:ss timestamp string to integer seconds."""
     # Handles both "mm:ss" and "h:mm:ss" (sessions can run past an hour).
     seconds = 0
     for part in ts.strip().split(":"):

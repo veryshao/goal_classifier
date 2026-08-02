@@ -29,6 +29,7 @@ clf = joblib.load(MODEL_PATH)
 
 def predict_file(transcript_path: str,
                  timestamp_window_seconds: int = None) -> list[dict]:
+    """Run the embedding classifier on one transcript. Returns a list of per-utterance dicts with prediction and context."""
     events     = parse_transcript(transcript_path)
     utterances = [e for e in events if e.event_type == "utterance"]
 
@@ -66,6 +67,7 @@ def predict_file(transcript_path: str,
 
 def review_predictions(results: list[dict],
                        transcript_path: str) -> dict[str, str]:
+    """Print each utterance predicted as positive for human review. Returns a label dict ready to save."""
     flagged = [r for r in results if r["pred"] in REVIEW_LABELS]
     confirmed_labels = {}
 
@@ -115,6 +117,7 @@ def review_predictions(results: list[dict],
 # ── Save label JSON ──────────────────────────────────────────────────────────
 
 def save_label_json(labels: dict, transcript_path: str, output_dir: str = "data/labels"):
+    """Save confirmed labels as a JSON file with the same stem as the transcript."""
     os.makedirs(output_dir, exist_ok=True)
     stem     = os.path.splitext(os.path.basename(transcript_path))[0]
     out_path = os.path.join(output_dir, f"{stem}.json")
@@ -129,6 +132,7 @@ def save_label_json(labels: dict, transcript_path: str, output_dir: str = "data/
 # ── Batch mode ───────────────────────────────────────────────────────────────
 
 def get_unlabeled_files(transcript_dir: str, label_dir: str) -> list[str]:
+    """Return transcript files that have no matching label JSON in label_dir."""
     all_transcripts = sorted(glob.glob(f"{transcript_dir}/*.txt"))
     labeled_stems   = {
         os.path.splitext(os.path.basename(f))[0]

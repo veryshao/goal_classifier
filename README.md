@@ -1,17 +1,25 @@
 # Goal Classifier
 
-Classifies utterances in tutoring-session transcripts as **O**utside or **I**nside a goal-setting discussion (binary O/I sequence tagging).
+Classifies utterances in tutoring-session transcripts as **O**utside or **I**nside a
+goal-setting discussion (binary sequence tagging). Two parallel annotation schemes are
+supported; the active scheme is configured in `label_schema.py`.
 
-Two independent approaches share the same labeled data:
+Three independent ML approaches share the same labeled data, plus a statistics script
+that requires no model:
 
-| Pipeline | File | Approach |
-|----------|------|----------|
-| **BERT** | `train.py` → `evaluate.py` | `bert-base-uncased` fine-tuned for 2-class classification |
-| **Embedding** | `embed.py` | OpenAI `text-embedding-3-large` + logistic regression |
+| Pipeline | Files | Approach |
+|----------|-------|----------|
+| **BERT fine-tuning** | `train.py` → `evaluate.py` | `bert-base-uncased` fine-tuned end-to-end |
+| **OpenAI embedding + LR** | `embed.py` | `text-embedding-3-large` embeddings + logistic regression |
+| **BERT embedding + LR** | `bert_embed.py` | Frozen `bert-base-uncased` embeddings + logistic regression |
+| **Goal statistics** | `goal_stats.py` | Descriptive stats from hand labels (no model required) |
 
-Both pipelines train on `data/labels/` and evaluate on `data/eval_labels/` by default (overridable via `--train-labels` / `--eval-labels` flags).
+All pipelines train on `data/labels/` and evaluate on `data/eval_labels/` by default
+(overridable via `--train-labels` / `--eval-labels`).
 
-> **Data privacy:** All transcript and label files are excluded from version control (see `.gitignore`). Store data externally on an encrypted drive or institutional data system — never commit it to this repository.
+> **Data privacy:** All transcript and label files are excluded from version control
+> (see `.gitignore`). Store data externally on an encrypted drive or institutional data
+> system — never commit it to this repository.
 
 ---
 
@@ -20,38 +28,52 @@ Both pipelines train on `data/labels/` and evaluate on `data/eval_labels/` by de
 ```
 goal_classifier/
 │
-├── data/                        # NOT in git — study data lives here locally
-│   ├── transcripts/             # Raw session transcripts (.txt)
-│   ├── labels/                  # Hand-annotated labels for training (.json)
-│   ├── eval_labels/             # Hold-out evaluation labels (.json)
-│   ├── indexed_transcripts/     # Pre-indexed transcripts for quick lookup
-│   ├── predicted_labels*/       # Output folders from predict.py runs
+├── data/                         # NOT in git — study data lives here locally
+│   ├── transcripts/              # Raw session transcripts (.txt)
+│   ├── labels/                   # Hand-annotated O/I training labels (.json)
+│   ├── eval_labels/              # Hold-out O/I evaluation labels (.json)
+│   ├── binary_labels/            # Hand-annotated U/R training labels (.json)
+│   ├── eval_binary_labels/       # Hold-out U/R evaluation labels (.json)
+│   ├── predicted_labels*/        # Output folders from predict*.py runs
 │   └── README.md
 │
-├── results/                     # NOT in git — BERT checkpoints and best_model/
-├── evaluation/                  # NOT in git — BERT evaluation outputs
-├── evaluation_embed/            # NOT in git — embedding pipeline evaluation outputs
-├── embeddings_cache/            # NOT in git — cached OpenAI embeddings (.npy)
+├── results/                      # NOT in git — BERT checkpoints → best_model/
+├── evaluation/                   # NOT in git — BERT pipeline evaluation outputs
+├── evaluation_embed/             # NOT in git — OpenAI embedding eval outputs
+├── evaluation_bert_embed/        # NOT in git — BERT embedding eval outputs
+├── evaluation_goal_stats/        # NOT in git — goal_stats.py outputs
+├── embeddings_cache/             # NOT in git — cached OpenAI embeddings (.npy)
+├── bert_embeddings_cache/        # NOT in git — cached BERT embeddings (.npy)
 │
-├── ── Shared utilities ──────────────────────────────────────────────────────
-├── parse_transcript.py          # Transcript parser → TranscriptEvent list
-├── print_indices.py             # Print utterance indices for hand-labeling
-├── build_label_json.py          # One-off helper for creating label JSON files
-├── label_schema.py              # Label scheme (single source of truth) and signal lists
-├── prepare_data.py              # Windowed example builder + data loader
+├── ── Shared utilities ──────────────────────────────────────────────────────────
+├── parse_transcript.py           # Transcript parser → TranscriptEvent list
+├── print_indices.py              # Print utterance indices for hand-labeling
+├── build_label_json.py           # One-off helper for creating label JSON files
+├── label_schema.py               # Active label scheme + both ANNOTATION_SCHEMES
+├── prepare_data.py               # Windowed example builder + data loader
 │
-├── ── BERT pipeline ─────────────────────────────────────────────────────────
-├── train.py                     # Fine-tune bert-base-uncased → results/best_model/
-├── evaluate.py                  # Evaluate BERT model on eval_labels/
-├── predict.py                   # BERT inference + interactive bootstrap labeling
+├── ── BERT fine-tuning pipeline ─────────────────────────────────────────────────
+├── train.py                      # Fine-tune bert-base-uncased → results/best_model/
+├── evaluate.py                   # Evaluate BERT model on eval_labels/
+├── predict.py                    # BERT inference + interactive bootstrap labeling
 │
-├── ── Embedding pipeline ────────────────────────────────────────────────────
-├── embed.py                     # OpenAI embeddings + logistic regression
+├── ── OpenAI embedding pipeline ─────────────────────────────────────────────────
+├── embed.py                      # OpenAI text-embedding-3-large + logistic regression
+├── predict_embed.py              # Embedding model inference + bootstrap labeling
 │
-└── ── Documentation ─────────────────────────────────────────────────────────
+├── ── BERT embedding pipeline ───────────────────────────────────────────────────
+├── bert_embed.py                 # Frozen bert-base-uncased embeddings + logistic regression
+├── predict_bert_embed.py         # BERT embedding model inference + bootstrap labeling
+│
+├── ── Goal statistics ───────────────────────────────────────────────────────────
+├── goal_stats.py                 # Descriptive stats from hand labels (no model needed)
+│
+└── ── Documentation ─────────────────────────────────────────────────────────────
     docs/
-    ├── bert_pipeline.md         # BERT pipeline walkthrough
-    └── embed_pipeline.md        # Embedding pipeline walkthrough
+    ├── bert_pipeline.md          # BERT fine-tuning pipeline walkthrough
+    ├── embed_pipeline.md         # OpenAI embedding pipeline walkthrough
+    ├── bert_embed_pipeline.md    # BERT embedding pipeline walkthrough
+    └── goal_stats.md             # Goal statistics script usage and interpretation
 ```
 
 ---
@@ -64,7 +86,7 @@ Install all dependencies:
 pip install torch transformers scikit-learn matplotlib numpy openai
 ```
 
-For the embedding pipeline only, set your OpenAI API key:
+For the OpenAI embedding pipeline only, set your API key:
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -72,88 +94,114 @@ export OPENAI_API_KEY=sk-...
 
 ---
 
-## Labeling transcripts (both pipelines)
+## Annotation schemes
 
-Both pipelines read from `data/labels/` (training) and `data/eval_labels/` (evaluation) by default. Use `--train-labels` / `--eval-labels` to point at different directories. Labels are sparse JSON files mapping utterance index → the positive label (currently `"I"`):
+Two parallel hand-annotation sets cover the same sessions:
+
+| Scheme | Labels | Meaning | Label directories |
+|--------|--------|---------|-------------------|
+| **O/I** | `O` / `I` | **I**nside a goal-setting discussion (span-style: includes transitions and asides within the episode) | `data/labels/`, `data/eval_labels/` |
+| **U/R** | `U` / `R` | **R**elated to goal discussion (per-utterance: only utterances that are themselves goal talk) | `data/binary_labels/`, `data/eval_binary_labels/` |
+
+The active scheme for the training/eval/predict pipelines is set in `label_schema.py`.
+`goal_stats.py` processes both schemes independently via `ANNOTATION_SCHEMES`. See
+`CLAUDE.md` for how to switch the active scheme.
+
+---
+
+## Labeling transcripts
+
+Labels are sparse JSON files mapping utterance index → the positive label:
 
 ```json
 { "12": "I", "13": "I", "14": "I", "27": "I" }
 ```
 
-Utterance indices come from `print_indices.py`. Unlisted utterances default to the negative label (currently `"O"`).
+Utterance indices come from `print_indices.py`. Unlisted utterances default to the
+negative label. An empty `{}` means no goal discussion.
 
 ```bash
 python print_indices.py data/transcripts/<file>.txt
 ```
 
-See [data/README.md](data/README.md) for the full label format.
+See `data/README.md` for the full label format.
 
 ---
 
-## BERT pipeline
+## BERT fine-tuning pipeline
 
 Full walkthrough: [docs/bert_pipeline.md](docs/bert_pipeline.md)
 
 ```bash
 python train.py       # train on data/labels/, evaluate on data/eval_labels/
-                      # saves best checkpoint → results/best_model/
 python evaluate.py    # full eval report → evaluation/
 python predict.py     # label new transcripts interactively
 
-# or with alternate label directories:
+# U/R scheme:
 python train.py    --train-labels data/binary_labels --eval-labels data/eval_binary_labels
 python evaluate.py --eval-labels data/eval_binary_labels
 ```
 
 ---
 
-## Embedding pipeline
+## OpenAI embedding pipeline
 
 Full walkthrough: [docs/embed_pipeline.md](docs/embed_pipeline.md)
 
 ```bash
-python embed.py       # embed, train, evaluate → evaluation_embed/
-
-# or with alternate label directories:
-python embed.py --train-labels data/binary_labels --eval-labels data/eval_binary_labels
+python embed.py          # embed + train + evaluate → evaluation_embed/
+python predict_embed.py  # label new transcripts interactively
 ```
 
-Embeddings are cached after the first run — the OpenAI API is only called once per transcript.
+Embeddings are cached in `embeddings_cache/` after the first run.
 
 ---
 
-## Switching to a different label scheme
+## BERT embedding pipeline
 
-The label scheme is defined in one place: `label_schema.py`. All other scripts import from it. To switch from O/I to a different binary scheme (e.g. G/U):
+Full walkthrough: [docs/bert_embed_pipeline.md](docs/bert_embed_pipeline.md)
+
+```bash
+python bert_embed.py          # embed + train + evaluate → evaluation_bert_embed/
+python predict_bert_embed.py  # label new transcripts interactively
+```
+
+Embeddings are cached in `bert_embeddings_cache/`. No API key required.
+
+---
+
+## Goal statistics
+
+Full walkthrough: [docs/goal_stats.md](docs/goal_stats.md)
+
+```bash
+python goal_stats.py               # both schemes → evaluation_goal_stats/OI/ and .../UR/
+python goal_stats.py --schemes OI  # one scheme only
+```
+
+No model or API key required — reads hand labels directly.
+
+---
+
+## Switching the active label scheme
+
+The active scheme is defined in `label_schema.py` (currently U/R). All training/eval/predict
+pipelines import from it. To switch:
 
 1. Edit `label_schema.py`:
    ```python
-   LABEL2ID = {"U": 0, "G": 1}   # was {"O": 0, "I": 1}
-   DEFAULT_LABEL  = "U"           # the negative / unlisted class
-   POSITIVE_LABEL = "G"           # the non-default class
+   LABEL2ID = {"O": 0, "I": 1}   # was {"U": 0, "R": 1}
+   DEFAULT_LABEL  = "O"
+   POSITIVE_LABEL = "I"
    ```
-   `ID2LABEL`, `LABEL_NAMES`, and `LABEL_IDS` derive automatically — no other files need editing.
+   `ID2LABEL`, `LABEL_NAMES`, and `LABEL_IDS` derive automatically.
 
-2. Create label files using the new scheme (e.g. `{"12": "G", "13": "G"}`). Unlisted utterances will default to `DEFAULT_LABEL`.
-
-3. Retrain from scratch — existing checkpoints are incompatible with a new label mapping:
+2. Point the pipeline at the matching label directories:
    ```bash
-   python train.py --train-labels data/your_labels --eval-labels data/your_eval_labels
+   python train.py --train-labels data/labels --eval-labels data/eval_labels
    ```
 
-> **Note:** The B/E legacy collapse in `load_labels_from_json` maps old B/E annotations to whatever `POSITIVE_LABEL` is set to. If you don't have legacy B/E data, this has no effect.
+3. Retrain from scratch — existing checkpoints are incompatible with a new label mapping.
 
----
-
-## Label format
-
-```json
-{
-  "12": "I",
-  "13": "I",
-  "14": "I",
-  "27": "I"
-}
-```
-
-Sparse JSON: only positive-class utterances appear as keys. An empty `{}` means no goal discussion in that session. See [data/README.md](data/README.md) for full details.
+`ANNOTATION_SCHEMES` in `label_schema.py` documents both sets and their directories for
+reference. See `CLAUDE.md` for the full switch procedure.
